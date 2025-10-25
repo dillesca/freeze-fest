@@ -1,0 +1,15 @@
+name: Deploy Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      environment: production
+      aws-cluster: freeze-fest-prod
+      aws-service: freeze-fest-prod
+    secrets: inherit

@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Manage Teams • Freeze Fest</title>
+    <link rel="icon" type="image/png" href="{{ request.url_for('static', path='img/freezefest.png') }}">
     <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
   </head>
   <body>
@@ -65,9 +66,6 @@
           <label for="free-agent-name">Full name</label>
           <input id="free-agent-name" name="name" type="text" required placeholder="Taylor Frost" />
 
-          <label for="free-agent-email">Email</label>
-          <input id="free-agent-email" name="email" type="email" required placeholder="taylor@example.com" />
-
           <label for="free-agent-note">Notes (optional)</label>
           <textarea id="free-agent-note" name="note" rows="2" placeholder="Preferred game or fun fact"></textarea>
 
@@ -87,7 +85,7 @@
           {% for agent in free_agents_pending %}
           <li class="free-agent-list__item">
             <span class="free-agent-name">{{ agent.name }}</span>
-            <span class="free-agent-meta">{{ agent.email }} · Joined {{ agent.created_at.strftime('%b %d, %I:%M %p') }}</span>
+            <span class="free-agent-meta">Joined {{ agent.created_at.strftime('%b %d, %I:%M %p') }}</span>
             {% if agent.note %}
             <p class="free-agent-note">“{{ agent.note }}”</p>
             {% endif %}
