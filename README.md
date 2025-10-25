@@ -104,6 +104,7 @@ docker run --rm \
 - Open pull requests against `develop` so code lands in the dev environment first.
 - Promote via PRs `develop → staging` (staging deploy) and `staging → main` (production). After releasing, merge `main` back into `staging`/`develop` to keep history aligned.
 
+56f39688284261679
 ### Required GitHub secrets
 
 - `AWS_ROLE_ARN` – IAM role to assume via GitHub OIDC for ECR/ECS access.

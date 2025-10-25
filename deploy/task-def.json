@@ -4,8 +4,8 @@
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "512",
   "memory": "1024",
-  "executionRoleArn": "REPLACE_WITH_EXECUTION_ROLE_ARN",
-  "taskRoleArn": "REPLACE_WITH_TASK_ROLE_ARN",
+  "executionRoleArn": "arn:aws:iam::096407948305:role/ecsTaskExecutionRole-freeze-fest",
+  "taskRoleArn": "arn:aws:iam::096407948305:role/ecsTaskRole-freeze-fest",
   "containerDefinitions": [
     {
       "name": "freeze-fest",

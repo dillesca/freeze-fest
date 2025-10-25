@@ -1,0 +1,14 @@
+name: Deploy Dev
+
+on:
+  push:
+    branches: [develop]
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      environment: dev
+      aws-cluster: freeze-fest-dev
+      aws-service: freeze-fest-dev
+    secrets: inherit
