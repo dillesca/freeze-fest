@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Freeze Fest 2025 RSVP</title>
+    <link rel="icon" type="image/png" href="{{ request.url_for('static', path='img/freezefest.png') }}">
     <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
   </head>
   <body>
@@ -14,10 +15,19 @@
         </div>
         <h1>{{ event.name }}</h1>
         <p class="page-subtitle">
-          November 15, 2025 · 2:00 PM · {{ event.location }}
+          November 15, 2025 · 1:00 PM · {{ event.location }}
         </p>
         <p class="page-subtitle">
-          RSVP to lock in your spot for the most joyful dead mosquito celebration of the year. Grab a teammate to prepare for cornhole, bucket golf, and kanban tournament competition. No bullshit — Bring your team spirit, and we’ll handle food and drinks.
+          Please join in the annual celebration of mosquito's freezing.
+        </p>
+        <p class="page-subtitle">
+          RSVP to lock in your spot for the most joyful dead mosquito celebration of the year.
+        </p>
+        <p class="page-subtitle">
+          Interested in lawn games? Grab a teammate to prepare for a cornhole, bucket golf, and kanban tournament competition. No bullshit —
+        </p>
+        <p class="page-subtitle">
+          Bring your team spirit, and we’ll handle food and drinks.
         </p>
         <nav class="page-nav" aria-label="Primary">
           <a href="{{ request.url_for('index') }}" aria-current="page">RSVP</a>
@@ -36,9 +46,6 @@
         <form method="post" action="{{ request.url_for('submit_rsvp') }}" class="rsvp-form">
           <label for="rsvp-name">Full name</label>
           <input id="rsvp-name" name="name" type="text" required placeholder="Alex Snow" />
-
-          <label for="rsvp-email">Email</label>
-          <input id="rsvp-email" name="email" type="email" required placeholder="alex@example.com" />
 
           <label for="rsvp-guests">How many in your party?</label>
           <input id="rsvp-guests" name="guests" type="number" min="1" value="1" required />
@@ -66,7 +73,7 @@
           </li>
           <li>
             <span>Time</span>
-            <strong>2:00 PM – Sunset</strong>
+            <strong>1:00 PM – Sunset</strong>
           </li>
           <li>
             <span>Location</span>
