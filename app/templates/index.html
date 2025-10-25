@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Freeze Fest 2025 RSVP</title>
+    <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-header__inner">
+        <div class="site-logo" role="presentation">
+          <img src="{{ request.url_for('static', path='img/freezefest.png') }}" alt="Freeze Fest mascot: a cartoon mosquito freezing inside a circle" loading="lazy" />
+        </div>
+        <h1>{{ event.name }}</h1>
+        <p class="page-subtitle">
+          November 15, 2025 · 2:00 PM · {{ event.location }}
+        </p>
+        <p class="page-subtitle">
+          RSVP to lock in your spot for the most joyful dead mosquito celebration of the year. Grab a teammate to prepare for cornhole, bucket golf, and kanban tournament competition. No bullshit — Bring your team spirit, and we’ll handle food and drinks.
+        </p>
+        <nav class="page-nav" aria-label="Primary">
+          <a href="{{ request.url_for('index') }}" aria-current="page">RSVP</a>
+          <a href="{{ request.url_for('team_directory') }}">Register a Team</a>
+          <a href="{{ request.url_for('bracket') }}">View Bracket</a>
+          <a href="{{ request.url_for('photos') }}">Photos</a>
+          <a href="{{ request.url_for('events_page') }}">Past Events</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="content">
+      <section class="panel">
+        <h2>RSVP</h2>
+        <p>Let us know you’re coming so we can prep heats, scorecards, and refreshments.</p>
+        <form method="post" action="{{ request.url_for('submit_rsvp') }}" class="rsvp-form">
+          <label for="rsvp-name">Full name</label>
+          <input id="rsvp-name" name="name" type="text" required placeholder="Alex Snow" />
+
+          <label for="rsvp-email">Email</label>
+          <input id="rsvp-email" name="email" type="email" required placeholder="alex@example.com" />
+
+          <label for="rsvp-guests">How many in your party?</label>
+          <input id="rsvp-guests" name="guests" type="number" min="1" value="1" required />
+
+          <label for="rsvp-message">Anything we should know?</label>
+          <textarea id="rsvp-message" name="message" rows="3" placeholder="Team preferences, accessibility needs, etc."></textarea>
+
+          <button type="submit">Send RSVP</button>
+        </form>
+
+        {% if rsvp_error %}
+        <p class="form-error">{{ rsvp_error }}</p>
+        {% endif %}
+        {% if rsvp_success %}
+        <p class="form-success">Thanks! See you at Freeze Fest.</p>
+        {% endif %}
+      </section>
+
+      <section class="panel">
+        <h2>Event Details</h2>
+        <ul class="event-meta">
+          <li>
+            <span>Date</span>
+            <strong>{{ event.event_date.strftime('%A, %B %d, %Y') }}</strong>
+          </li>
+          <li>
+            <span>Time</span>
+            <strong>2:00 PM – Sunset</strong>
+          </li>
+          <li>
+            <span>Location</span>
+            <strong>{{ event.location }}</strong>
+          </li>
+          <li>
+            <span>Games</span>
+            <strong>Cornhole · Bucket Golf · Kanban</strong>
+          </li>
+          <li>
+            <span>RSVPs so far</span>
+            <strong>{{ rsvps|length }} parties / {{ guest_total }} guests</strong>
+          </li>
+        </ul>
+
+        <h3>Guest List</h3>
+        {% if rsvps %}
+        <ul class="rsvp-list">
+          {% for entry in rsvps %}
+          <li>
+            <span class="rsvp-name">{{ entry.name }}</span>
+            <span class="rsvp-meta">{{ entry.guests }} attending · RSVP {{ entry.created_at.strftime('%b %d, %I:%M %p') }}</span>
+            {% if entry.message %}
+            <p class="rsvp-note">“{{ entry.message }}”</p>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty-state">No RSVPs yet — be the first to confirm!</p>
+        {% endif %}
+      </section>
+
+    </main>
+
+    <footer class="page-footer">
+      <p>
+        Built for Freeze Fest 2025. Questions? Email hello@freezefest.com.
+      </p>
+    </footer>
+
+    <script src="{{ request.url_for('static', path='js/main.js') }}" defer></script>
+  </body>
+</html>

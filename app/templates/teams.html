@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Manage Teams • Freeze Fest</title>
+    <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-header__inner">
+        <div class="site-logo" role="presentation">
+          <img src="{{ request.url_for('static', path='img/freezefest.png') }}" alt="Freeze Fest mascot: a cartoon mosquito freezing inside a circle" loading="lazy" />
+        </div>
+        <h1>Manage {{ event.name }} Teams</h1>
+        <p class="page-subtitle">
+          Rosters below are tied to the {{ event.event_date.strftime('%Y') }} showdown on {{ event.event_date.strftime('%B %d') }}.
+        </p>
+        <nav class="page-nav" aria-label="Primary">
+          <a href="{{ request.url_for('index') }}">RSVP</a>
+          <a href="{{ request.url_for('team_directory') }}" aria-current="page">Register a Team</a>
+          <a href="{{ request.url_for('bracket') }}">View Bracket</a>
+          <a href="{{ request.url_for('photos') }}">Photos</a>
+          <a href="{{ request.url_for('events_page') }}">Past Events</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="content">
+      <section class="panel">
+        <h2>Create a Team</h2>
+        <form method="post" action="{{ request.url_for('create_team') }}" class="participants-form team-form">
+          <label for="team-name">Team name</label>
+          <input
+            id="team-name"
+            name="name"
+            type="text"
+            placeholder="e.g., Snowbound Sprinters"
+            value="{{ form_value }}"
+            required
+            minlength="2"
+          />
+
+          {% if form_error %}
+          <p class="form-error">{{ form_error }}</p>
+          {% endif %}
+
+          {% if success_message %}
+          <p class="form-success">{{ success_message }}</p>
+          {% endif %}
+
+          <div class="form-footer">
+            <button type="submit">Add Team</button>
+            <a class="text-link" href="{{ request.url_for('bracket') }}">View bracket →</a>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>Free Agent Pool</h2>
+        <p>
+          Flying solo? Join the pool and we'll auto-match you with the next available player to create a new team.
+        </p>
+        <form method="post" action="{{ request.url_for('register_free_agent') }}" class="participants-form team-form">
+          <label for="free-agent-name">Full name</label>
+          <input id="free-agent-name" name="name" type="text" required placeholder="Taylor Frost" />
+
+          <label for="free-agent-email">Email</label>
+          <input id="free-agent-email" name="email" type="email" required placeholder="taylor@example.com" />
+
+          <label for="free-agent-note">Notes (optional)</label>
+          <textarea id="free-agent-note" name="note" rows="2" placeholder="Preferred game or fun fact"></textarea>
+
+          <button type="submit">Join Free Agent Pool</button>
+        </form>
+
+        {% if free_agent_error %}
+        <p class="form-error">{{ free_agent_error }}</p>
+        {% endif %}
+        {% if free_agent_success %}
+        <p class="form-success">{{ free_agent_success }}</p>
+        {% endif %}
+
+        <h3>Waiting for a teammate</h3>
+        {% if free_agents_pending %}
+        <ul class="free-agent-list">
+          {% for agent in free_agents_pending %}
+          <li class="free-agent-list__item">
+            <span class="free-agent-name">{{ agent.name }}</span>
+            <span class="free-agent-meta">{{ agent.email }} · Joined {{ agent.created_at.strftime('%b %d, %I:%M %p') }}</span>
+            {% if agent.note %}
+            <p class="free-agent-note">“{{ agent.note }}”</p>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty-state">No free agents at the moment.</p>
+        {% endif %}
+
+        <h3>Recently paired</h3>
+        {% if free_agents_paired %}
+        <ul class="free-agent-list">
+          {% for agent in free_agents_paired %}
+          <li class="free-agent-list__item free-agent-list__item--paired">
+            <span class="free-agent-name">{{ agent.name }}</span>
+            <span class="free-agent-meta">Now playing on {{ team_lookup.get(agent.team_id, 'a new team') }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty-state">No pairings yet.</p>
+        {% endif %}
+      </section>
+
+      <section class="panel">
+        <h2>Current Teams</h2>
+        {% if teams %}
+        <ul class="team-list" aria-live="polite">
+          {% for team in teams %}
+          <li class="team-list__item">
+            <span class="team-list__name">{{ team.name }}</span>
+            <span class="team-list__meta">Added {{ team.created_at.strftime('%b %d, %Y %I:%M %p') }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty-state">
+          No teams yet. Use the form to add your first entry—new teams will appear here instantly.
+        </p>
+        {% endif %}
+      </section>
+    </main>
+
+    <footer class="page-footer">
+      <p>
+        Teams are stored in a local SQLite database (configurable via the <code>DATABASE_URL</code> env var).
+      </p>
+    </footer>
+  </body>
+</html>

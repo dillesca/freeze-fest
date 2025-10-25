@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ event.name }} • Photos</title>
+    <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-header__inner">
+        <div class="site-logo" role="presentation">
+          <img src="{{ request.url_for('static', path='img/freezefest.png') }}" alt="Freeze Fest mascot" loading="lazy" />
+        </div>
+        <h1>{{ event.name }} Gallery</h1>
+        <p class="page-subtitle">Share highlights from South Valley, Albuquerque, NM – uploads appear instantly.</p>
+        <nav class="page-nav" aria-label="Primary">
+          <a href="{{ request.url_for('index') }}">RSVP</a>
+          <a href="{{ request.url_for('team_directory') }}">Register a Team</a>
+          <a href="{{ request.url_for('bracket') }}">View Bracket</a>
+          <a href="{{ request.url_for('photos') }}" aria-current="page">Photos</a>
+          <a href="{{ request.url_for('events_page') }}">Past Events</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="content">
+      <section class="panel">
+        <h2>Slideshow</h2>
+        {% if photos %}
+        <div class="photo-carousel">
+          <button class="carousel-btn carousel-btn--prev" type="button" aria-label="Previous photo">&#10094;</button>
+          <div class="photo-carousel__viewport">
+            {% for photo in photos %}
+            <figure class="photo-slide{% if loop.first %} is-active{% endif %}">
+              <img src="{{ request.url_for('static', path='uploads/' + photo.filename) }}" alt="Freeze Fest photo uploaded on {{ photo.created_at.strftime('%b %d, %Y') }}" />
+              <figcaption>Uploaded {{ photo.created_at.strftime('%b %d, %Y %I:%M %p') }}</figcaption>
+            </figure>
+            {% endfor %}
+          </div>
+          <button class="carousel-btn carousel-btn--next" type="button" aria-label="Next photo">&#10095;</button>
+        </div>
+        {% else %}
+        <p class="empty-state">No photos yet. Be the first to upload!</p>
+        {% endif %}
+      </section>
+
+      <section class="panel">
+        <h2>Upload a Photo</h2>
+        <form method="post" action="{{ request.url_for('upload_photo') }}" enctype="multipart/form-data" class="upload-form">
+          <label for="photo-upload" class="upload-label">Add a new photo</label>
+          <div class="upload-field">
+            <input id="photo-upload" name="image" type="file" accept="image/*" required />
+            <span class="file-name" data-file-name>No file chosen</span>
+            <button type="submit">Upload</button>
+          </div>
+          <p class="helper-text">Accepted formats: PNG, JPG, GIF, WebP. Max ~10MB recommended.</p>
+        </form>
+
+        {% if photo_error %}
+        <p class="form-error">{{ photo_error }}</p>
+        {% endif %}
+        {% if photo_success %}
+        <p class="form-success">Photo uploaded! Refresh the slideshow to see it rotate in.</p>
+        {% endif %}
+      </section>
+    </main>
+    <script src="{{ request.url_for('static', path='js/main.js') }}" defer></script>
+  </body>
+</html>

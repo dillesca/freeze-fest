@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ event.name }} • Bracket & Scores</title>
+    <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-header__inner">
+        <div class="site-logo" role="presentation">
+          <img src="{{ request.url_for('static', path='img/freezefest.png') }}" alt="Freeze Fest mascot" loading="lazy" />
+        </div>
+        <h1>{{ event.name }} Matchups</h1>
+        <p class="page-subtitle">Live bracket for {{ team_count }} teams • Cornhole · Bucket Golf · Kanban</p>
+        <nav class="page-nav" aria-label="Primary">
+          <a href="{{ request.url_for('index') }}">RSVP</a>
+          <a href="{{ request.url_for('team_directory') }}">Register a Team</a>
+          <a href="{{ request.url_for('bracket') }}" aria-current="page">View Bracket</a>
+          <a href="{{ request.url_for('photos') }}">Photos</a>
+          <a href="{{ request.url_for('events_page') }}">Past Events</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="content">
+      <section class="panel next-match">
+        <h2>Games In Play</h2>
+        {% if next_matches %}
+        <ul class="current-match-list">
+          {% for entry in next_matches %}
+          <li class="current-match-list__item">
+            <span class="current-match-list__game">{{ entry.game }}</span>
+            <span class="current-match-list__teams">{{ entry.match.team1 or 'TBD' }} vs {{ entry.match.team2 or 'TBD' }}</span>
+            <span class="current-match-list__status">{{ entry.match.status.replace('_', ' ') }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty-state">No matches scheduled yet. Add teams to generate the bracket.</p>
+        {% endif %}
+      </section>
+
+      <section class="panel">
+        <h2>Game Rotation & Scores</h2>
+        {% if matches_by_game %}
+        <div class="game-schedule" role="list">
+          {% for block in matches_by_game %}
+          <div class="game-card" role="listitem">
+            <header class="game-card__header">
+              <p class="game-label">{{ block.game }}</p>
+              <h3>{{ block.game }} Heats</h3>
+              {% if block.game == 'Bucket Golf' %}
+              <p class="match-note">Lowest score wins</p>
+              {% endif %}
+            </header>
+            <ul class="match-list">
+              {% for match in block.matches %}
+              <li class="match-list__item">
+                <div>
+                  <span class="match-order">#{{ match.order }}</span>
+                  <span class="match-status">{{ match.status.replace('_', ' ') }}</span>
+                </div>
+                <div class="match-teams">
+                  {% if match.team1_id == match.team2_id and block.game == 'Bucket Golf' %}
+                  <span class="team-name">{{ match.team1 or 'TBD' }}</span>
+                  <span class="match-list__divider">solo run</span>
+                  <span class="team-name">Course</span>
+                  {% else %}
+                  <span class="team-name">{{ match.team1 or 'TBD' }}</span>
+                  <span class="match-list__divider">vs</span>
+                  <span class="team-name">{{ match.team2 or 'TBD' }}</span>
+                  {% endif %}
+                </div>
+                {% if match.status == 'completed' %}
+                <p class="match-score">Final: {{ match.score1 }} – {{ match.score2 }}</p>
+                {% elif match.status == 'in_progress' %}
+                <form method="post" action="{{ request.url_for('record_score', match_id=match.id) }}" class="match-score-form">
+                  <label>
+                    {{ match.team1 or 'Team 1' }}
+                    <input type="number" name="score_team1" min="0" value="{{ match.score1 if match.score1 is not none else '' }}" required />
+                  </label>
+                  {% if match.team1_id == match.team2_id and block.game == 'Bucket Golf' %}
+                  <input type="hidden" name="score_team2" value="0" />
+                  {% else %}
+                  <label>
+                    {{ match.team2 or 'Team 2' }}
+                    <input type="number" name="score_team2" min="0" value="{{ match.score2 if match.score2 is not none else '' }}" required />
+                  </label>
+                  {% endif %}
+                  <button type="submit">Submit Score</button>
+                </form>
+                {% else %}
+                <p class="match-note">Waiting for earlier games.</p>
+                {% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="empty-state">Bracket not ready. Add teams or pair free agents to generate matches.</p>
+        {% endif %}
+      </section>
+
+      <section class="panel">
+        <h2>Leaderboard</h2>
+        {% if leaderboard %}
+        <ul class="leaderboard">
+          {% for row in leaderboard %}
+          <li class="leaderboard__row{% if loop.index <= 4 %} leaderboard__row--playoff{% endif %}">
+            <span class="leaderboard__team">{{ loop.index }}. {{ row.name }}</span>
+            {% if bucket_pool_mode %}
+            <span class="leaderboard__stat">Bucket score: {{ row.bucket_score if row.bucket_score is not none else '—' }}</span>
+            {% else %}
+            <span class="leaderboard__stat">Wins: {{ row.wins }}</span>
+            <span class="leaderboard__stat">Games: {{ row.games }}</span>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty-state">No scores reported yet.</p>
+        {% endif %}
+      </section>
+
+      <section class="panel">
+        <h2>Playoff Picture</h2>
+        <p>Top four teams advance to a bucket golf showdown. Lowest two scores move on to a cornhole final. If there’s a tie for second, tied teams replay the course hole-by-hole until one wins a hole.</p>
+        {% if top_four %}
+        <ol class="playoff-list">
+          {% for row in top_four %}
+          <li class="playoff-list__item">
+            <span class="playoff-list__name">{{ row.name }}</span>
+            {% if bucket_pool_mode %}
+            <span class="playoff-list__stat">Bucket score: {{ row.bucket_score if row.bucket_score is not none else '—' }}</span>
+            {% else %}
+            <span class="playoff-list__stat">Record: {{ row.wins }}-{{ row.games - row.wins }}</span>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ol>
+        {% else %}
+        <p class="empty-state">Need results before rankings can be produced.</p>
+        {% endif %}
+
+        {% if finalists and finalists|length == 2 %}
+        <h3>Projected Finalists</h3>
+        <p class="finalists">{{ finalists[0].name }} vs {{ finalists[1].name }} (Cornhole final)</p>
+        {% endif %}
+      </section>
+    </main>
+  </body>
+</html>

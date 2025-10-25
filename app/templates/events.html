@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Past Freeze Fest Events</title>
+    <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-header__inner">
+        <div class="site-logo" role="presentation">
+          <img src="{{ request.url_for('static', path='img/freezefest.png') }}" alt="Freeze Fest mascot" loading="lazy" />
+        </div>
+        <h1>Freeze Fest Archives</h1>
+        <p class="page-subtitle">Relive highlights from past tournaments and see who took home the crown.</p>
+        <nav class="page-nav" aria-label="Primary">
+          <a href="{{ request.url_for('index') }}">RSVP</a>
+          <a href="{{ request.url_for('team_directory') }}">Register a Team</a>
+          <a href="{{ request.url_for('bracket') }}">View Bracket</a>
+          <a href="{{ request.url_for('photos') }}">Photos</a>
+          <a href="{{ request.url_for('events_page') }}" aria-current="page">Past Events</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="content">
+      {% for card in events %}
+      {% set event = card.event %}
+      <section class="panel event-card">
+        <header class="panel-header">
+          <h2>{{ event.name }}</h2>
+          <p class="event-card__meta">{{ event.event_date.strftime('%B %d, %Y') }} · {{ event.location }}</p>
+          <p>{{ event.description }}</p>
+        </header>
+        <ul class="event-meta">
+          <li>
+            <span>Games</span>
+            <strong>{{ event.games }}</strong>
+          </li>
+          {% if event.winners %}
+          <li>
+            <span>Winners</span>
+            <strong>{{ event.winners }}</strong>
+          </li>
+          {% endif %}
+        </ul>
+        {% if card.photos %}
+        <div class="event-photos">
+          {% for photo in card.photos %}
+          <figure>
+            <img src="{{ request.url_for('static', path='uploads/' + photo.filename) }}" alt="Photo from {{ event.name }}" />
+            <figcaption>{{ photo.created_at.strftime('%b %d, %Y') }}</figcaption>
+          </figure>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="empty-state">No photos archived for this year yet.</p>
+        {% endif %}
+      </section>
+      {% endfor %}
+    </main>
+  </body>
+</html>
