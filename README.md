@@ -2,7 +2,6 @@
 
 A lightweight FastAPI web app for the 2025 Freeze Fest annual celebration (November 15, 2025, 1:00 PM). Guests can read event details and RSVP so organizers know how many players to expect. All data is tied to the 2025 event in SQLite.
 
-
 ## Quick start
 
 ```bash
@@ -105,7 +104,10 @@ docker run --rm \
 - Open pull requests against `develop` so code lands in the dev environment first.
 - Promote via PRs `develop → staging` (staging deploy) and `staging → main` (production). After releasing, merge `main` back into `staging`/`develop` to keep history aligned.
 
+<<<<<<< HEAD
 56f39688284261679
+=======
+>>>>>>> 27f0497 (development: adding in aws stuff)
 ### Required GitHub secrets
 
 - `AWS_ROLE_ARN` – IAM role to assume via GitHub OIDC for ECR/ECS access.
