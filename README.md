@@ -1,6 +1,6 @@
 # Freeze Fest 2025 RSVP
 
-A lightweight FastAPI web app for the 2025 Freeze Fest triathlon (November 15, 2025, 2:00 PM). Guests can read event details and RSVP so organizers know how many players to expect. All data is tied to the 2025 event in SQLite.
+A lightweight FastAPI web app for the 2025 Freeze Fest triathlon (November 15, 2025, 1:00 PM). Guests can read event details and RSVP so organizers know how many players to expect. All data is tied to the 2025 event in SQLite.
 
 ## Quick start
 
@@ -15,7 +15,7 @@ Open your browser at http://127.0.0.1:5000 to interact with the site.
 
 ## Managing teams
 
-Visit `/teams` (Manage Teams link in the header) to add team names once. Teams are scoped to the 2025 event and stored in `freeze_fest.db` by default, or point the `DATABASE_URL` environment variable to another database supported by SQLModel. Free agents can also register without a partner; the app automatically pairs the next two and spins up a new team for them.
+Visit `/teams` (Manage Teams link in the header) to add team names once. Teams are scoped to the 2025 event and stored in `freeze_fest.db` by default, or point the `DATABASE_URL` environment variable to another database supported by SQLModel. Free agents can also register without a partner; the app keeps them in a waiting list until teams are formed at the event.
 
 ## RSVPs
 
@@ -63,7 +63,11 @@ docker build -t freeze-fest .
 Run it:
 
 ```bash
-docker run --rm -p 5000:5000 freeze-fest
+docker run --rm \            
+  -p 5000:5000 \
+  -v "$(pwd)/data:/app/data" \
+  -e DATABASE_URL=sqlite:///./data/freeze_fest.db \
+  freeze-fest
 ```
 
 ## Project structure
@@ -74,6 +78,8 @@ docker run --rm -p 5000:5000 freeze-fest
   - `routes.py` – HTTP routes and request handling
   - `templates/` – Jinja templates for rendering HTML
   - `static/` – CSS, JavaScript, and media uploads
+- `deploy/` – ECS task definition templates consumed by GitHub Actions
+- `.github/workflows/` – CI/CD pipelines (lint/tests + dev/staging/prod deploys)
 - `Dockerfile` – Container recipe for deployment
 - `requirements.txt` – Python dependencies pinned for reproducible builds
 
@@ -83,3 +89,25 @@ docker run --rm -p 5000:5000 freeze-fest
 - Add optional scoring targets per game type
 - Integrate WebSocket updates for live match progress
 - Expose CSV exports for RSVPs, teams, and results
+- Update free agent team assignments so that an admin can create the teams from the free agents manually
+
+## CI/CD
+
+- Pushes to `develop` trigger the Dev ECS deploy (`deploy-dev.yml`).
+- Pushes to `staging` trigger the Staging ECS deploy (`deploy-staging.yml`).
+- Pushes/dispatches on `main` trigger the Production ECS deploy (`deploy-prod.yml`).
+- `.github/workflows/ci.yml` runs tests on every PR/push and should be required in branch protection rules.
+
+### Branch strategy
+
+- Start feature branches from `develop` (`git checkout develop && git pull && git checkout -b feature/foo`).
+- Open pull requests against `develop` so code lands in the dev environment first.
+- Promote via PRs `develop → staging` (staging deploy) and `staging → main` (production). After releasing, merge `main` back into `staging`/`develop` to keep history aligned.
+
+### Required GitHub secrets
+
+- `AWS_ROLE_ARN` – IAM role to assume via GitHub OIDC for ECR/ECS access.
+- `ECR_REGISTRY` – e.g., `123456789012.dkr.ecr.us-east-1.amazonaws.com`.
+- `ECR_REPOSITORY` – name of your ECR repo (e.g., `freeze-fest`).
+
+Customize `deploy/task-def.json` with the correct task/execution roles, log settings, env vars, etc., and provision ECS clusters/services named in the deploy workflows (`freeze-fest-dev`, `freeze-fest-staging`, `freeze-fest-prod`).
