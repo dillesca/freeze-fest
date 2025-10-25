@@ -1,0 +1,14 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches: [staging]
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      environment: staging
+      aws-cluster: freeze-fest-staging
+      aws-service: freeze-fest-staging
+    secrets: inherit

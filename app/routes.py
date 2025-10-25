@@ -53,17 +53,15 @@ async def submit_rsvp(
     request: Request,
     session: Session = Depends(get_session),
     name: str = Form(...),
-    email: str = Form(...),
     guests: int = Form(default=1),
     message: str | None = Form(default=None),
 ):
     event = get_active_event(session)
     trimmed_name = name.strip()
-    trimmed_email = email.strip()
     error: str | None = None
 
-    if not trimmed_name or not trimmed_email:
-        error = "Name and email are required."
+    if not trimmed_name:
+        error = "Name is required."
     elif guests < 1:
         error = "Please include at least one guest."
 
@@ -74,7 +72,7 @@ async def submit_rsvp(
 
     rsvp = RSVP(
         name=trimmed_name,
-        email=trimmed_email,
+        email="",
         guests=guests,
         message=message.strip() if message else None,
         event_id=event.id,
