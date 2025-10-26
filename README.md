@@ -1,6 +1,7 @@
 # Freeze Fest 2025 RSVP
 
-A lightweight FastAPI web app for the 2025 Freeze Fest triathlon (November 15, 2025, 1:00 PM). Guests can read event details and RSVP so organizers know how many players to expect. All data is tied to the 2025 event in SQLite.
+A lightweight FastAPI web app for the 2025 Freeze Fest annual celebration (November 15, 2025, 1:00 PM). Guests can read event details and RSVP so organizers know how many players to expect. All data is tied to the 2025 event in SQLite.
+
 
 ## Quick start
 
@@ -78,8 +79,8 @@ docker run --rm \
   - `routes.py` – HTTP routes and request handling
   - `templates/` – Jinja templates for rendering HTML
   - `static/` – CSS, JavaScript, and media uploads
-- `deploy/` – ECS task definition templates consumed by GitHub Actions
-- `.github/workflows/` – CI/CD pipelines (lint/tests + dev/staging/prod deploys)
+- `deploy/` – ECS task definition templates used by GitHub Actions
+- `.github/workflows/` – CI/CD pipelines for testing and deployments
 - `Dockerfile` – Container recipe for deployment
 - `requirements.txt` – Python dependencies pinned for reproducible builds
 
