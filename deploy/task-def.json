@@ -4,8 +4,8 @@
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "512",
   "memory": "1024",
-  "executionRoleArn": "REPLACE_WITH_EXECUTION_ROLE_ARN",
-  "taskRoleArn": "REPLACE_WITH_TASK_ROLE_ARN",
+  "executionRoleArn": "arn:aws:iam::096407948305:role/ecsTaskExecutionRole-freeze-fest",
+  "taskRoleArn": "arn:aws:iam::096407948305:role/ecsTaskRole-freeze-fest",
   "containerDefinitions": [
     {
       "name": "freeze-fest",
@@ -21,14 +21,14 @@
       "environment": [
         {
           "name": "DATABASE_URL",
-          "value": "sqlite:///./freeze_fest.db"
+          "value": "freeze-fest-dev-db.cjo80eo6qd1a.us-west-2.rds.amazonaws.com"
         }
       ],
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
           "awslogs-group": "/ecs/freeze-fest",
-          "awslogs-region": "us-east-1",
+          "awslogs-region": "us-west-2",
           "awslogs-stream-prefix": "ecs"
         }
       }
