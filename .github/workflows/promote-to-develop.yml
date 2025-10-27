@@ -1,0 +1,37 @@
+name: Promote To Develop
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: Feature branch to merge (usually the PR head)
+        required: true
+        default: ""
+      target_branch:
+        description: Target branch that feeds the dev environment
+        required: true
+        default: develop
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_branch }}
+
+      - name: Merge source branch into target
+        env:
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin "${SOURCE_BRANCH}:${SOURCE_BRANCH}"
+          git merge --no-ff "${SOURCE_BRANCH}"
+          git push origin HEAD:"${TARGET_BRANCH}"

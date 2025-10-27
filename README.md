@@ -68,10 +68,11 @@ The tests point `DATABASE_URL` at a temporary SQLite file to stay fast and isola
 
 ## Branch strategy
 
-1. Always branch from `main` (`git checkout main && git pull && git checkout -b feature/foo`).
-2. Open pull requests directly against `main`.
-3. Before merging, add the `ready-for-prod` label (guard workflow requires it). Use feature flags to keep `main` deployable.
-4. After release, delete the feature branch; no separate staging/develop branch is needed.
+1. Branch from `main` for every feature (`git checkout main && git pull && git checkout -b feature/foo`).
+2. Open a pull request targeting `main` and keep pushing to the feature branch until CI is green and the review is approved (`ready-for-prod` label still gates the PR).
+3. After approval, run the **Promote To Develop** workflow from the Actions tab and set `source_branch` to your feature branch. The workflow merges that branch into `develop`, which in turn triggers the normal CI run and the automatic dev deployment.
+4. Once the dev environment is validated, trigger the **Promote To Main** workflow (source defaults to `develop`). That merge kicks off the production deployment workflow.
+5. Delete the feature branch after promotion to keep history tidy.
 
 ## Required GitHub secrets
 
