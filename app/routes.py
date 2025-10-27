@@ -19,33 +19,27 @@ templates = Jinja2Templates(directory="app/templates")
 async def index(request: Request, session: Session = Depends(get_session)):
     success = request.query_params.get("rsvp") == "saved"
     context = _home_context(session, rsvp_success=success)
-    context["request"] = request
-    return templates.TemplateResponse("index.html", context)
+    return templates.TemplateResponse(request, "index.html", context)
 
 
 @router.get("/bracket", response_class=HTMLResponse, name="bracket")
 async def bracket_page(request: Request, session: Session = Depends(get_session)):
     context = _schedule_context(session)
-    context["request"] = request
-    return templates.TemplateResponse("bracket.html", context)
+    return templates.TemplateResponse(request, "bracket.html", context)
 
 
 @router.get("/photos", response_class=HTMLResponse, name="photos")
 async def photos_page(request: Request, session: Session = Depends(get_session)):
     success = request.query_params.get("photo") == "saved"
     context = _photo_context(session, photo_success=success)
-    context["request"] = request
-    return templates.TemplateResponse("photos.html", context)
+    return templates.TemplateResponse(request, "photos.html", context)
 
 
 @router.get("/events", response_class=HTMLResponse, name="events_page")
 async def events_page(request: Request, session: Session = Depends(get_session)):
     cards = _events_context(session)
-    context = {
-        "request": request,
-        "events": cards,
-    }
-    return templates.TemplateResponse("events.html", context)
+    context = {"events": cards}
+    return templates.TemplateResponse(request, "events.html", context)
 
 
 @router.post("/rsvp", response_class=HTMLResponse, name="submit_rsvp")
@@ -67,8 +61,7 @@ async def submit_rsvp(
 
     if error:
         context = _home_context(session, rsvp_error=error)
-        context["request"] = request
-        return templates.TemplateResponse("index.html", context, status_code=400)
+        return templates.TemplateResponse(request, "index.html", context, status_code=400)
 
     rsvp = RSVP(
         name=trimmed_name,
@@ -105,8 +98,7 @@ async def upload_photo(
 
     if error:
         context = _photo_context(session, photo_error=error)
-        context["request"] = request
-        return templates.TemplateResponse("photos.html", context, status_code=400)
+        return templates.TemplateResponse(request, "photos.html", context, status_code=400)
 
     filename = f"{uuid4().hex}{suffix}"
     destination = UPLOAD_DIR / filename
@@ -129,7 +121,6 @@ async def team_directory(request: Request, session: Session = Depends(get_sessio
         success_message = "Team added successfully."
 
     context = _team_context(
-        request=request,
         session=session,
         form_error=None,
         form_value="",
@@ -142,7 +133,7 @@ async def team_directory(request: Request, session: Session = Depends(get_sessio
         context["free_agent_success"] = "Matched free agents and created a new team!"
     context.setdefault("free_agent_error", None)
     context.setdefault("free_agent_success", None)
-    return templates.TemplateResponse("teams.html", context)
+    return templates.TemplateResponse(request, "teams.html", context)
 
 
 @router.post("/teams", response_class=HTMLResponse, name="create_team")
@@ -164,13 +155,12 @@ async def create_team(
 
     if error:
         context = _team_context(
-            request=request,
             session=session,
             form_error=error,
             form_value=name,
             success_message=None,
         )
-        return templates.TemplateResponse("teams.html", context)
+        return templates.TemplateResponse(request, "teams.html", context)
 
     team = Team(name=cleaned, event_id=event.id)
     session.add(team)
@@ -197,7 +187,6 @@ async def register_free_agent(
 
     if not trimmed_name:
         context = _team_context(
-            request=request,
             session=session,
             form_error=None,
             form_value="",
@@ -205,7 +194,7 @@ async def register_free_agent(
         )
         context["free_agent_error"] = "Name is required for free agents."
         context.setdefault("free_agent_success", None)
-        return templates.TemplateResponse("teams.html", context, status_code=400)
+        return templates.TemplateResponse(request, "teams.html", context, status_code=400)
 
     agent = FreeAgent(
         name=trimmed_name,
@@ -451,7 +440,6 @@ def _fetch_photos(session: Session, event_id: int):
 
 def _team_context(
     *,
-    request: Request,
     session: Session,
     form_error: str | None,
     form_value: str,
@@ -463,7 +451,6 @@ def _team_context(
     free_agents_pending = _fetch_free_agents(session, event.id, status="pending")
     free_agents_paired = _fetch_free_agents(session, event.id, status="paired")
     return {
-        "request": request,
         "event": event,
         "teams": teams,
         "form_error": form_error,
