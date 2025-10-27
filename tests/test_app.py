@@ -11,13 +11,14 @@ TEST_DB = Path("test_app.sqlite3")
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{TEST_DB}")
 
 from app import app  # noqa: E402
-from app.database import Event, engine  # noqa: E402
+from app.database import Event, engine, init_db  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
 def _cleanup_db():
     if TEST_DB.exists():
         TEST_DB.unlink()
+    init_db()
     yield
     if TEST_DB.exists():
         TEST_DB.unlink()
