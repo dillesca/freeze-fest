@@ -1,117 +1,82 @@
 # Freeze Fest 2025 RSVP
 
-A lightweight FastAPI web app for the 2025 Freeze Fest annual celebration (November 15, 2025, 1:00 PM). Guests can read event details and RSVP so organizers know how many players to expect. All data is tied to the 2025 event in SQLite.
+A lightweight FastAPI web app for the 2025 Freeze Fest triathlon (November 15, 2025, 1:00 PM). Guests can browse event details, RSVP, upload photos, and manage teams. All data is stored in PostgreSQL (local Docker Compose or RDS/Aurora in AWS).
 
 ## Quick start
 
 ```bash
+# local env vars + docker compose defaults
+cp .env.example .env
+
+# start a Postgres instance for local dev
+docker compose up -d postgres
+
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+export DATABASE_URL=postgresql://freeze_fest:freeze_fest@localhost:5432/freeze_fest
 uvicorn app:app --reload --port 5000
 ```
 
-Open your browser at http://127.0.0.1:5000 to interact with the site.
+Open http://127.0.0.1:5000 to interact with the site. Prefer containers for everything? Run `docker compose up --build` to launch the API + Postgres services together.
 
-## Managing teams
-
-Visit `/teams` (Manage Teams link in the header) to add team names once. Teams are scoped to the 2025 event and stored in `freeze_fest.db` by default, or point the `DATABASE_URL` environment variable to another database supported by SQLModel. Free agents can also register without a partner; the app keeps them in a waiting list until teams are formed at the event.
-
-## RSVPs
-
-Visitors can submit their name, email, party size, and any notes from the landing page. Responses are stored in the database and summarized in the guest list so you always know the expected attendance.
-
-## Free agent pool
-
-Individuals who don't yet have a teammate can register as free agents. The site keeps a waiting list, auto-matches the next two people, and creates a shared team so they appear in the bracket instantly.
-
-## Photo gallery
-
-Visit `/photos` to see the live slideshow. Attendees can upload PNG/JPG/GIF/WebP images from that page and the carousel updates immediately so everyone sees the latest highlights.
-
-## Past events
-
-Head to `/events` for the archive. Each event card shows the date, location, games played, winners (when available), and a mini photo gallery (including 2024's Cornhole/Kanban/Rillors tournament won by John & Stefan).
-
-## Bracket preview
-
-Use `/bracket` to show the automatically generated three-game rotation (Cornhole, Bucket Golf, Kanban). Teams can enter scores for the currently active match, the next game is highlighted, and a live leaderboard keeps track of wins.
-
-### Playoffs
-
-- Top four teams qualify based on the leaderboard.
-- Playoff semifinal: single bucket-golf round with all four teams; lowest two scores advance (ties replay hole-by-hole).
-- Championship: cornhole head-to-head between the two semifinal winners.
-
-## 2025 event details
-
-- **Date:** November 15, 2025
-- **Location:** South Valley, Albuquerque, NM
-- **Games:** Cornhole, Bucket Golf, Kanban
-- **Slug:** `freeze-fest-2025`
-
-All teams, schedules, and uploads are linked to this event record. If you need to reset the schema because the database existed before events were introduced, delete `freeze_fest.db` (or run your own migration) so SQLModel can add the new tables/columns.
-
-## Docker
-
-Build the container:
+## Running tests
 
 ```bash
-docker build -t freeze-fest .
+# local venv
+python -m pytest
+
+# inside Docker (matches CI image)
+docker compose build api
+docker compose run --rm api python -m pytest
 ```
 
-Run it:
+The tests point `DATABASE_URL` at a temporary SQLite file to stay fast and isolated from your Postgres instances; the override happens automatically inside the test harness.
 
-```bash
-docker run --rm \            
-  -p 5000:5000 \
-  -v "$(pwd)/data:/app/data" \
-  -e DATABASE_URL=sqlite:///./data/freeze_fest.db \
-  freeze-fest
-```
+## Features
+
+- **RSVP / Teams** – submits attendees, collects free agents, and stores teams per event.
+- **Photo uploads** – `/photos` page lets attendees upload images (stored per event).
+- **Past events** – `/events` lists previous Freeze Fest tournaments, winners, and photos.
+- **Bracket & playoffs** – `/bracket` shows live match rotation, scoring, and playoff picture.
+
+## Playoffs format
+
+1. Top four leaderboard teams enter a bucket-golf semifinal (lowest two scores advance, ties replay a hole).  
+2. Final two teams play a cornhole championship match.
+
+## Local Docker Compose
+
+- `.env.example` defines defaults for the Postgres service (`POSTGRES_USER/PASSWORD/DB`).
+- `docker compose up -d postgres` starts the DB only; `docker compose up --build` runs API + DB together.
+- Override `DATABASE_URL` per environment using `.env` or ECS task definitions.
 
 ## Project structure
 
-- `app/` – FastAPI application package
-  - `bracket.py` – Scheduling helpers for the three-game rotation
-  - `database.py` – SQLModel definitions for events, teams, free agents, matches, and photos
-  - `routes.py` – HTTP routes and request handling
-  - `templates/` – Jinja templates for rendering HTML
-  - `static/` – CSS, JavaScript, and media uploads
-- `deploy/` – ECS task definition templates used by GitHub Actions
-- `.github/workflows/` – CI/CD pipelines for testing and deployments
-- `Dockerfile` – Container recipe for deployment
-- `requirements.txt` – Python dependencies pinned for reproducible builds
-
-## Next steps
-
-- Add authentication and role-based controls for admins vs. spectators
-- Add optional scoring targets per game type
-- Integrate WebSocket updates for live match progress
-- Expose CSV exports for RSVPs, teams, and results
-- Update free agent team assignments so that an admin can create the teams from the free agents manually
+- `app/` – FastAPI application package.
+- `docker-compose.yml` / `.env.example` – local containers + env vars.
+- `deploy/` – ECS task definition templates consumed by GitHub Actions.
+- `.github/workflows/` – CI (`ci.yml`), production deploy (`deploy-prod.yml`), and the main-branch guard.
+- `tests/` – pytest suite using an ephemeral SQLite DB.
+- `requirements.txt`, `Dockerfile`, etc.
 
 ## CI/CD
 
-- Pushes to `develop` trigger the Dev ECS deploy (`deploy-dev.yml`).
-- Pushes to `staging` trigger the Staging ECS deploy (`deploy-staging.yml`).
-- Pushes/dispatches on `main` trigger the Production ECS deploy (`deploy-prod.yml`).
-- `.github/workflows/ci.yml` runs tests on every PR/push and should be required in branch protection rules.
+- `.github/workflows/ci.yml` installs dependencies, compiles modules, and runs `python -m pytest` on every push/PR.
+- `.github/workflows/deploy-prod.yml` builds/pushes the Docker image and updates the production ECS service on pushes (or manual dispatch) to `main`.
+- `.github/workflows/main-branch-guard.yml` enforces the `ready-for-prod` label before PRs can merge into `main`.
 
-### Branch strategy
+## Branch strategy
 
-- Start feature branches from `develop` (`git checkout develop && git pull && git checkout -b feature/foo`).
-- Open pull requests against `develop` so code lands in the dev environment first.
-- Promote via PRs `develop → staging` (staging deploy) and `staging → main` (production). After releasing, merge `main` back into `staging`/`develop` to keep history aligned.
+1. Always branch from `main` (`git checkout main && git pull && git checkout -b feature/foo`).
+2. Open pull requests directly against `main`.
+3. Before merging, add the `ready-for-prod` label (guard workflow requires it). Use feature flags to keep `main` deployable.
+4. After release, delete the feature branch; no separate staging/develop branch is needed.
 
-<<<<<<< HEAD
-56f39688284261679
-=======
->>>>>>> 27f0497 (development: adding in aws stuff)
-### Required GitHub secrets
+## Required GitHub secrets
 
-- `AWS_ROLE_ARN` – IAM role to assume via GitHub OIDC for ECR/ECS access.
+- `AWS_ROLE_ARN` – IAM role GitHub Actions assumes (via OIDC) for ECS/ECR operations.
 - `ECR_REGISTRY` – e.g., `123456789012.dkr.ecr.us-east-1.amazonaws.com`.
-- `ECR_REPOSITORY` – name of your ECR repo (e.g., `freeze-fest`).
+- `ECR_REPOSITORY` – the ECR repo name (e.g., `freeze-fest`).
 
-Customize `deploy/task-def.json` with the correct task/execution roles, log settings, env vars, etc., and provision ECS clusters/services named in the deploy workflows (`freeze-fest-dev`, `freeze-fest-staging`, `freeze-fest-prod`).
+Customize `deploy/task-def.json` with your execution/task role ARNs, log group, env vars (including production `DATABASE_URL`), and ECS clusters/services (`freeze-fest-prod`, optional dev/staging if you add them back).
