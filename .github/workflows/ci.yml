@@ -2,8 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [develop, staging, main]
+    branches:
+      - '**'
   pull_request:
+    branches:
+      - '**'
 
 jobs:
   test:
@@ -15,3 +18,4 @@ jobs:
           python-version: '3.11'
       - run: pip install -r requirements.txt
       - run: python -m compileall app
+      - run: python -m pytest

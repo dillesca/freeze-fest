@@ -40,10 +40,17 @@ def _build_engine_url() -> str:
     return os.environ.get("DATABASE_URL", DEFAULT_SQLITE_PATH)
 
 
-engine = create_engine(
-    _build_engine_url(),
-    connect_args={"check_same_thread": False},
-)
+def _build_engine() -> "Engine":
+    url = _build_engine_url()
+    engine_kwargs = {}
+    if url.startswith("sqlite"):
+        # SQLite needs check_same_thread disabled for FastAPI concurrency,
+        # but passing this flag to other drivers (e.g., psycopg2) raises errors.
+        engine_kwargs["connect_args"] = {"check_same_thread": False}
+    return create_engine(url, **engine_kwargs)
+
+
+engine = _build_engine()
 
 UPLOAD_DIR = Path("app/static/uploads")
 SAMPLE_IMAGE = Path("app/static/img/freezefest.png")
