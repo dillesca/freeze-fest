@@ -146,7 +146,7 @@ def _ensure_upload_dir() -> None:
 
 def _ensure_events() -> list[Event]:
     ensured: list[Event] = []
-    with Session(engine) as session:
+    with Session(engine, expire_on_commit=False) as session:
         for definition in EVENT_DEFINITIONS:
             event = session.exec(select(Event).where(Event.slug == definition["slug"])).first()
             if not event:
@@ -155,6 +155,8 @@ def _ensure_events() -> list[Event]:
                 session.commit()
                 session.refresh(event)
             ensured.append(event)
+        for event in ensured:
+            session.expunge(event)
     return ensured
 
 

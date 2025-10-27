@@ -1,4 +1,5 @@
 import os
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -7,8 +8,8 @@ import httpx
 from sqlmodel import Session, select
 
 
-TEST_DB = Path("test_app.sqlite3")
-os.environ.setdefault("DATABASE_URL", f"sqlite:///{TEST_DB}")
+TEST_DB = Path(tempfile.gettempdir()) / "freeze_fest_test_app.sqlite3"
+os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB}"
 
 from app import app  # noqa: E402
 from app.database import Event, engine, init_db  # noqa: E402
@@ -20,6 +21,7 @@ def _cleanup_db():
         TEST_DB.unlink()
     init_db()
     yield
+    engine.dispose()
     if TEST_DB.exists():
         TEST_DB.unlink()
 
