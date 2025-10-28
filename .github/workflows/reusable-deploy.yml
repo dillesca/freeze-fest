@@ -16,7 +16,13 @@ on:
         required: false
         type: string
         default: us-east-1
-    secrets: inherit
+    secrets:
+      AWS_ROLE_ARN:
+        required: true
+      ECR_REGISTRY:
+        required: true
+      ECR_REPOSITORY:
+        required: true
 
 permissions:
   contents: read
