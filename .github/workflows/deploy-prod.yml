@@ -3,6 +3,10 @@ name: Deploy Production
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   deploy:
     uses: ./.github/workflows/reusable-deploy.yml
@@ -10,4 +14,7 @@ jobs:
       environment: production
       aws-cluster: freeze-fest-prod
       aws-service: freeze-fest-prod
-    secrets: inherit
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+      ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
