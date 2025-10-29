@@ -10,10 +10,13 @@ from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 
 from .bracket import GAMES, generate_schedule
+
 from .database import Event, FreeAgent, Match, Photo, RSVP, Team, UPLOAD_DIR, get_active_event, get_session
 
+BASE_DIR = Path(__file__).resolve().parent
+
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 @router.get("/", response_class=HTMLResponse, name="index")
 async def index(request: Request, session: Session = Depends(get_session)):

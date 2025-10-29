@@ -10,6 +10,8 @@ from typing import Iterator
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
+BASE_DIR = Path(__file__).resolve().parent
+
 
 DEFAULT_SQLITE_PATH = "sqlite:///./freeze_fest.db"
 ACTIVE_EVENT_SLUG = "freeze-fest-2025"
@@ -52,8 +54,9 @@ def _build_engine() -> "Engine":
 
 engine = _build_engine()
 
-UPLOAD_DIR = Path("app/static/uploads")
-SAMPLE_IMAGE = Path("app/static/img/freezefest.png")
+STATIC_DIR = BASE_DIR / "static"
+UPLOAD_DIR = STATIC_DIR / "uploads"
+SAMPLE_IMAGE = STATIC_DIR / "img/freezefest.png"
 SAMPLE_UPLOAD_NAME = "sample-freezefest.png"
 
 ACTIVE_EVENT_DEFINITION = {
