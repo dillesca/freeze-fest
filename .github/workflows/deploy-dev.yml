@@ -6,6 +6,10 @@ on:
       - develop
   workflow_dispatch:
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   deploy:
     uses: ./.github/workflows/reusable-deploy.yml
@@ -13,4 +17,7 @@ jobs:
       environment: dev
       aws-cluster: freeze-fest-dev
       aws-service: freeze-fest-dev
-    secrets: inherit
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+      ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}

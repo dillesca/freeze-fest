@@ -15,8 +15,14 @@ on:
       aws-region:
         required: false
         type: string
-        default: us-east-1
-    secrets: inherit
+        default: us-west-2
+    secrets:
+      AWS_ROLE_ARN:
+        required: true
+      ECR_REGISTRY:
+        required: true
+      ECR_REPOSITORY:
+        required: true
 
 permissions:
   contents: read
@@ -37,6 +43,32 @@ jobs:
 
       - name: Log in to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registry: ${{ secrets.ECR_REGISTRY }}
+
+      - name: Ensure ECR repository exists
+        run: |
+          set -euo pipefail
+          echo "Caller identity:"
+          aws sts get-caller-identity
+          echo "Registry: $ECR_REGISTRY"
+          echo "Repository: $ECR_REPOSITORY"
+          if aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" >/dev/null 2>&1; then
+            echo "Repository found."
+          else
+            echo "Repository missing; attempting to create it."
+            if aws ecr create-repository --repository-name "$ECR_REPOSITORY" >/dev/null 2>&1; then
+              echo "Repository created."
+            else
+              echo "::error::Could not find or create repository $ECR_REPOSITORY."
+              echo "Available repositories in this account/region:"
+              aws ecr describe-repositories --query 'repositories[].repositoryName'
+              exit 1
+            fi
+          fi
+        env:
+          ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
 
       - name: Build image
         run: |
