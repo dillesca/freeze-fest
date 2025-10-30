@@ -10,6 +10,11 @@ from .routes import router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # pragma: no cover
+    try:
+        import os
+        print("Cloud SQL dir contents:", os.listdir("/cloudsql"))
+    except FileNotFoundError:
+        print("Cloud SQL dir missing; /cloudsql not found")
     init_db()
     yield
 
