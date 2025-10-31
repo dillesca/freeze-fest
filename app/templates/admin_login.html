@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Past Freeze Fest Events</title>
+    <title>Admin Sign In • Freeze Fest</title>
     <link rel="icon" type="image/png" href="{{ request.url_for('static', path='img/freezefest.png') }}">
     <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
   </head>
@@ -27,55 +27,43 @@
         <div class="site-logo" role="presentation">
           <img src="{{ request.url_for('static', path='img/freezefest.png') }}" alt="Freeze Fest mascot" loading="lazy" />
         </div>
-        <h1>Freeze Fest Archives</h1>
-        <p class="page-subtitle">Relive highlights from past tournaments and see who took home the crown.</p>
+        <h1>Admin Access</h1>
+        <p class="page-subtitle">Sign in to manage brackets, scores, and tournament settings.</p>
         <nav class="page-nav" aria-label="Primary">
           <a href="{{ request.url_for('index') }}">RSVP</a>
           <a href="{{ request.url_for('team_directory') }}">Register a Team</a>
           <a href="{{ request.url_for('bracket') }}">View Bracket</a>
           <a href="{{ request.url_for('photos') }}">Photos</a>
-          <a href="{{ request.url_for('events_page') }}" aria-current="page">Past Events</a>
+          <a href="{{ request.url_for('events_page') }}">Past Events</a>
           <a href="{{ request.url_for('game_rules') }}">Game Rules</a>
           <a href="{{ request.url_for('about_page') }}">About</a>
         </nav>
       </div>
     </header>
 
-    <main class="content">
-      {% for card in events %}
-      {% set event = card.event %}
-      <section class="panel event-card">
-        <header class="panel-header">
-          <h2>{{ event.name }}</h2>
-          <p class="event-card__meta">{{ event.event_date.strftime('%B %d, %Y') }} · {{ event.location }}</p>
-          <p>{{ event.description }}</p>
-        </header>
-        <ul class="event-meta">
-          <li>
-            <span>Games</span>
-            <strong>{{ event.games }}</strong>
-          </li>
-          {% if event.winners %}
-          <li>
-            <span>Winners</span>
-            <strong>{{ event.winners }}</strong>
-          </li>
-          {% endif %}
-        </ul>
-        {% if card.photos %}
-        <div class="event-photos">
-          {% for photo in card.photos %}
-          <figure>
-            <img src="{{ request.url_for('static', path='uploads/' + photo.filename) }}" alt="Photo from {{ event.name }}" />
-            <figcaption>{{ photo.created_at.strftime('%b %d, %Y') }}</figcaption>
-          </figure>
-          {% endfor %}
-        </div>
-        {% else %}
-        <p class="empty-state">No photos archived for this year yet.</p>
+    <main class="content content--single">
+      <section class="panel">
+        <h2>Administrator Login</h2>
+        {% if error %}
+        <p class="flash flash--error">{{ error }}</p>
         {% endif %}
+        <form method="post" action="{{ request.url_for('admin_login_submit') }}" class="admin-login-form">
+          <input type="hidden" name="next" value="{{ next }}" />
+
+          <label for="admin-username">Username</label>
+          <input id="admin-username" name="username" type="text" autocomplete="username" required />
+
+          <label for="admin-password">Password</label>
+          <input id="admin-password" name="password" type="password" autocomplete="current-password" required />
+
+          <button type="submit">Sign In</button>
+        </form>
+        <p class="control-hint">Lost? Head back to the <a href="{{ request.url_for('bracket') }}">bracket</a>.</p>
       </section>
-      {% endfor %}
     </main>
+
+    <footer class="page-footer">
+      <p>Freeze Fest admin access is limited to tournament organizers.</p>
+    </footer>
   </body>
 </html>

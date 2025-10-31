@@ -19,10 +19,10 @@ EVENT_DEFINITIONS = [
     {
         "name": "Freeze Fest 2025",
         "slug": ACTIVE_EVENT_SLUG,
-        "description": "Annual cornhole, bucket golf, and kanban showdown",
+        "description": "Annual cornhole, bucket golf, and KanJam showdown",
         "location": "South Valley, Albuquerque, NM",
         "event_date": date(2025, 11, 15),
-        "games": "Cornhole, Bucket Golf, Kanban",
+        "games": "Cornhole, Bucket Golf, KanJam",
         "winners": None,
     },
     {
@@ -31,7 +31,7 @@ EVENT_DEFINITIONS = [
         "description": "Tri-game series celebrating the end of mosquito season",
         "location": "South Valley, Albuquerque, NM",
         "event_date": date(2024, 11, 11),
-        "games": "Cornhole, Kanban, Rollors",
+        "games": "Cornhole, KanJam, Rollors",
         "winners": "John & Stefan",
     },
 ]
@@ -62,7 +62,7 @@ SAMPLE_UPLOAD_NAME = "sample-freezefest.png"
 ACTIVE_EVENT_DEFINITION = {
     "name": "Freeze Fest 2025",
     "slug": "freeze-fest-2025",
-    "description": "Annual cornhole, bucket golf, and kanban showdown",
+    "description": "Annual cornhole, bucket golf, and KanJam showdown",
     "location": "South Valley, Albuquerque, NM",
     "event_date": date(2025, 11, 15),
 }
@@ -75,7 +75,7 @@ class Event(SQLModel, table=True):
     description: str | None = Field(default=None)
     location: str | None = Field(default=None)
     event_date: date = Field(nullable=False)
-    games: str = Field(default="Cornhole, Bucket Golf, Kanban", nullable=False)
+    games: str = Field(default="Cornhole, Bucket Golf, KanJam", nullable=False)
     winners: str | None = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
 
@@ -85,6 +85,8 @@ class Team(SQLModel, table=True):
     name: str = Field(index=True, min_length=2, max_length=128, nullable=False, unique=True)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     event_id: int = Field(foreign_key="event.id", nullable=False, index=True)
+    member_one: str | None = Field(default=None, max_length=128)
+    member_two: str | None = Field(default=None, max_length=128)
 
 
 class Photo(SQLModel, table=True):
@@ -126,12 +128,16 @@ class Match(SQLModel, table=True):
     score_team1: int | None = Field(default=None)
     score_team2: int | None = Field(default=None)
     status: str = Field(default="pending", nullable=False)
+    is_playoff: bool = Field(default=False, nullable=False)
+    playoff_round: str | None = Field(default=None, max_length=50)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
 
 
 def init_db() -> None:
     """Create tables if they don't already exist."""
     SQLModel.metadata.create_all(engine)
+    _ensure_team_member_columns()
+    _ensure_playoff_columns()
     _ensure_upload_dir()
     events = _ensure_events()
     _seed_sample_photos(events)
@@ -192,3 +198,53 @@ def _seed_sample_photos(events: list[Event]) -> None:
                 )
             )
             session.commit()
+
+
+def _ensure_team_member_columns() -> None:
+    with engine.begin() as conn:
+        dialect = conn.dialect.name
+        existing_columns: set[str] = set()
+        if dialect == "sqlite":
+            rows = conn.exec_driver_sql("PRAGMA table_info('team')")
+            existing_columns = {row[1] for row in rows}
+        else:
+            rows = conn.exec_driver_sql(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name='team' AND table_schema = current_schema()"
+            )
+            existing_columns = {row[0] for row in rows}
+
+        statements: list[str] = []
+        if "member_one" not in existing_columns:
+            statements.append("ALTER TABLE team ADD COLUMN member_one VARCHAR(128)")
+        if "member_two" not in existing_columns:
+            statements.append("ALTER TABLE team ADD COLUMN member_two VARCHAR(128)")
+
+        for stmt in statements:
+            conn.exec_driver_sql(stmt)
+
+
+def _ensure_playoff_columns() -> None:
+    with engine.begin() as conn:
+        dialect = conn.dialect.name
+        if dialect == "sqlite":
+            rows = conn.exec_driver_sql("PRAGMA table_info('match')")
+            existing_columns = {row[1] for row in rows}
+        else:
+            rows = conn.exec_driver_sql(
+                "SELECT column_name FROM information_schema.columns WHERE table_name='match' AND table_schema = current_schema()"
+            )
+            existing_columns = {row[0] for row in rows}
+
+        statements: list[str] = []
+        if "is_playoff" not in existing_columns:
+            if dialect == "sqlite":
+                statements.append("ALTER TABLE match ADD COLUMN is_playoff INTEGER DEFAULT 0 NOT NULL")
+            else:
+                statements.append("ALTER TABLE match ADD COLUMN is_playoff BOOLEAN DEFAULT FALSE NOT NULL")
+        if "playoff_round" not in existing_columns:
+            column_type = "TEXT" if dialect == "sqlite" else "VARCHAR(50)"
+            statements.append(f"ALTER TABLE match ADD COLUMN playoff_round {column_type}")
+
+        for stmt in statements:
+            conn.exec_driver_sql(stmt)

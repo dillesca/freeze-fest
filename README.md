@@ -39,6 +39,8 @@ The tests point `DATABASE_URL` at a temporary SQLite file to stay fast and isola
 - **Photo uploads** – `/photos` page lets attendees upload images (stored per event).
 - **Past events** – `/events` lists previous Freeze Fest tournaments, winners, and photos.
 - **Bracket & playoffs** – `/bracket` shows live match rotation, scoring, and playoff picture.
+- **Game rules** – `/rules` provides concise KanJam, Cornhole-to-11, and six-hole bucket golf summaries.
+- **Admin controls** – organizers log in at `/admin/login` to regenerate brackets, reset scores, and edit results.
 
 ## Playoffs format
 
@@ -50,6 +52,7 @@ The tests point `DATABASE_URL` at a temporary SQLite file to stay fast and isola
 - `.env.example` defines defaults for the Postgres service (`POSTGRES_USER/PASSWORD/DB`).
 - `docker compose up -d postgres` starts the DB only; `docker compose up --build` runs API + DB together.
 - Override `DATABASE_URL` per environment using `.env` or deployment-time configuration (e.g., Cloud Run secrets or env vars).
+- Set `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_SESSION_SECRET` in your environment to protect tournament controls locally.
 
 ## Project structure
 
@@ -89,3 +92,9 @@ gcloud run deploy freeze-fest \
 ```
 
 Replace the placeholders with your project ID, database password, and Cloud SQL instance details. Map `DATABASE_URL` from Secret Manager if you prefer not to inline credentials.
+
+## Admin access
+
+- Sign in at `/admin/login` using `ADMIN_USERNAME` / `ADMIN_PASSWORD`.
+- Set `ADMIN_SESSION_SECRET` so the login cookie can be signed securely (must be consistent across deployments).
+- Only authenticated admins see tournament controls (start/reset bracket) and score editing forms on the bracket page.

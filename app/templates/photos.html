@@ -8,8 +8,22 @@
     <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
   </head>
   <body>
+    {% set current_target = request.url.path %}
+    {% if request.url.query %}
+      {% set current_target = current_target + '?' + request.url.query %}
+    {% endif %}
     <header class="page-header">
       <div class="page-header__inner">
+        <div class="admin-banner" role="navigation" aria-label="Admin">
+          {% if is_admin %}
+          <form method="post" action="{{ request.url_for('admin_logout') }}" class="admin-banner__logout">
+            <input type="hidden" name="next" value="{{ current_target }}" />
+            <button type="submit">Log out</button>
+          </form>
+          {% else %}
+          <a href="{{ request.url_for('admin_login') }}?next={{ current_target | urlencode }}">Admin Login</a>
+          {% endif %}
+        </div>
         <div class="site-logo" role="presentation">
           <img src="{{ request.url_for('static', path='img/freezefest.png') }}" alt="Freeze Fest mascot" loading="lazy" />
         </div>
@@ -21,6 +35,7 @@
           <a href="{{ request.url_for('bracket') }}">View Bracket</a>
           <a href="{{ request.url_for('photos') }}" aria-current="page">Photos</a>
           <a href="{{ request.url_for('events_page') }}">Past Events</a>
+          <a href="{{ request.url_for('game_rules') }}">Game Rules</a>
           <a href="{{ request.url_for('about_page') }}">About</a>
         </nav>
       </div>

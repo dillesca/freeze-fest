@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import random
 from typing import Iterable, List, Sequence, Tuple, TypedDict
 
-GAMES = ("Cornhole", "Bucket Golf", "Kanban")
+GAMES = ("Cornhole", "Bucket Golf", "KanJam")
 
 
 class Matchup(TypedDict, total=False):
@@ -23,14 +24,18 @@ def normalize_participants(entries: Iterable[str]) -> List[str]:
     return [value.strip() for value in entries if value and value.strip()]
 
 
-def generate_schedule(participants: Sequence[str]) -> List[GameSchedule]:
+def generate_schedule(participants: Sequence[str], *, seed: int | None = None) -> List[GameSchedule]:
     """Create pairings for each Freeze Fest game with minimal repeat opponents."""
     cleaned = normalize_participants(participants)
     if len(cleaned) < 2:
         cleaned = ["Team Aurora", "Team Borealis"]
 
-    rounds = _round_robin_pairings(cleaned, len(GAMES))
-    opponent_history = {team: set() for team in cleaned}
+    working = cleaned[:]
+    rng = random.Random(seed)
+    rng.shuffle(working)
+
+    rounds = _round_robin_pairings(working, len(GAMES))
+    opponent_history = {team: set() for team in working}
 
     schedule: List[GameSchedule] = []
     for index, game in enumerate(GAMES):

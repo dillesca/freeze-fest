@@ -8,8 +8,22 @@
     <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
   </head>
   <body>
+    {% set current_target = request.url.path %}
+    {% if request.url.query %}
+      {% set current_target = current_target + '?' + request.url.query %}
+    {% endif %}
     <header class="page-header">
       <div class="page-header__inner">
+        <div class="admin-banner" role="navigation" aria-label="Admin">
+          {% if is_admin %}
+          <form method="post" action="{{ request.url_for('admin_logout') }}" class="admin-banner__logout">
+            <input type="hidden" name="next" value="{{ current_target }}" />
+            <button type="submit">Log out</button>
+          </form>
+          {% else %}
+          <a href="{{ request.url_for('admin_login') }}?next={{ current_target | urlencode }}">Admin Login</a>
+          {% endif %}
+        </div>
         <div class="site-logo" role="presentation">
           <img src="{{ request.url_for('static', path='img/freezefest.png') }}" alt="Freeze Fest mascot: a cartoon mosquito freezing inside a circle" loading="lazy" />
         </div>
@@ -23,6 +37,7 @@
           <a href="{{ request.url_for('bracket') }}">View Bracket</a>
           <a href="{{ request.url_for('photos') }}">Photos</a>
           <a href="{{ request.url_for('events_page') }}">Past Events</a>
+          <a href="{{ request.url_for('game_rules') }}">Game Rules</a>
           <a href="{{ request.url_for('about_page') }}">About</a>
         </nav>
       </div>
@@ -45,6 +60,26 @@
             required
             minlength="2"
           />
+
+          <label for="team-member-one">Player one</label>
+          <input
+            id="team-member-one"
+            name="member_one"
+            type="text"
+            placeholder="Player one (e.g., Taylor Frost)"
+            value="{{ form_member_one }}"
+          />
+
+          <label for="team-member-two">Player two</label>
+          <input
+            id="team-member-two"
+            name="member_two"
+            type="text"
+            placeholder="Player two (e.g., Devon Snow)"
+            value="{{ form_member_two }}"
+          />
+
+          <p class="form-hint">Player names are optional but help fans follow the action.</p>
 
           {% if form_error %}
           <p class="form-error">{{ form_error }}</p>
@@ -118,6 +153,19 @@
                   {% endfor %}
                 </select>
 
+                {% if free_agents_pending|length > 1 %}
+                <label for="agent-pair-{{ agent.id }}">Create new team with</label>
+                <select id="agent-pair-{{ agent.id }}" name="pair_with">
+                  <option value="">-- Don't create new team --</option>
+                  {% for other in free_agents_pending %}
+                  {% if other.id != agent.id %}
+                  <option value="{{ other.id }}">{{ other.name }}</option>
+                  {% endif %}
+                  {% endfor %}
+                </select>
+                <p class="form-hint">Pick another free agent to instantly form a new team.</p>
+                {% endif %}
+
                 <div class="inline-actions">
                   <button type="submit">Save changes</button>
                 </div>
@@ -170,6 +218,17 @@
                   {% endfor %}
                 </select>
 
+                {% if free_agents_pending %}
+                <label for="agent-pair-{{ agent.id }}">Create new team with</label>
+                <select id="agent-pair-{{ agent.id }}" name="pair_with">
+                  <option value="">-- Don't create new team --</option>
+                  {% for other in free_agents_pending %}
+                  <option value="{{ other.id }}">{{ other.name }}</option>
+                  {% endfor %}
+                </select>
+                <p class="form-hint">Choose a pending free agent to regroup this player.</p>
+                {% endif %}
+
                 <div class="inline-actions">
                   <button type="submit">Save changes</button>
                 </div>
@@ -201,11 +260,34 @@
               <span class="team-list__name">{{ team.name }}</span>
               <span class="team-list__meta">Added {{ team.created_at.strftime('%b %d, %Y %I:%M %p') }}</span>
             </div>
+            {% if team.member_one or team.member_two %}
+            <p class="team-list__members">
+              <strong>Players:</strong>
+              {{ team.member_one or 'TBD' }} &amp; {{ team.member_two or 'TBD' }}
+            </p>
+            {% endif %}
             <details class="inline-editor">
               <summary>Manage {{ team.name }}</summary>
               <form method="post" action="{{ request.url_for('update_team', team_id=team.id) }}" class="inline-form">
                 <label for="team-edit-name-{{ team.id }}">Team name</label>
                 <input id="team-edit-name-{{ team.id }}" name="name" type="text" value="{{ team.name }}" minlength="2" required />
+
+                <label for="team-edit-member-one-{{ team.id }}">Player one</label>
+                <input
+                  id="team-edit-member-one-{{ team.id }}"
+                  name="member_one"
+                  type="text"
+                  value="{{ team.member_one or '' }}"
+                />
+
+                <label for="team-edit-member-two-{{ team.id }}">Player two</label>
+                <input
+                  id="team-edit-member-two-{{ team.id }}"
+                  name="member_two"
+                  type="text"
+                  value="{{ team.member_two or '' }}"
+                />
+
                 <div class="inline-actions">
                   <button type="submit">Save changes</button>
                 </div>

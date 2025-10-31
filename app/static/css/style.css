@@ -58,6 +58,34 @@ body {
   gap: 0.75rem;
 }
 
+.admin-banner {
+  align-self: stretch;
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.admin-banner a,
+.admin-banner__logout button {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  color: white;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.admin-banner a:hover,
+.admin-banner a:focus-visible,
+.admin-banner__logout button:hover,
+.admin-banner__logout button:focus-visible {
+  background: rgba(255, 255, 255, 0.35);
+}
+
 .site-logo {
   display: flex;
   justify-content: center;
@@ -94,6 +122,27 @@ body {
   transition: background 150ms ease, color 150ms ease;
 }
 
+.nav-logout-form {
+  display: inline-flex;
+  align-items: center;
+}
+
+.nav-logout-form button {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: white;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  cursor: pointer;
+}
+
+.nav-logout-form button:hover,
+.nav-logout-form button:focus-visible {
+  background: rgba(255, 255, 255, 0.3);
+  color: white;
+}
+
 .page-nav a[aria-current="page"] {
   background: rgba(255, 255, 255, 0.2);
 }
@@ -102,15 +151,200 @@ body {
   background: rgba(255, 255, 255, 0.3);
 }
 
-.content--single {
-  display: flex;
-  justify-content: center;
-  padding: clamp(1rem, 5vw, 4rem);
+.form-hint {
+  font-size: 0.85rem;
+  opacity: 0.7;
+  margin-top: -0.25rem;
 }
 
-.content--single .panel {
-  max-width: 760px;
-  width: 100%;
+.section-intro {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+  opacity: 0.75;
+}
+
+.team-list__members {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.bracket-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.control-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.control-buttons form button {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 999px;
+  padding: 0.65rem 1.6rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.control-buttons form button.secondary {
+  background: #555;
+}
+
+.control-buttons__logout {
+  margin-left: auto;
+}
+
+.control-buttons form button.secondary:hover,
+.control-buttons form button.secondary:focus-visible {
+  filter: brightness(1.15);
+}
+
+.control-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.flash {
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.flash--success {
+  background: rgba(25, 135, 84, 0.15);
+  color: #196f54;
+  border: 1px solid rgba(25, 135, 84, 0.3);
+}
+
+.flash--error {
+  background: rgba(192, 57, 43, 0.15);
+  color: #8c2f24;
+  border: 1px solid rgba(192, 57, 43, 0.3);
+}
+
+.flash--warning {
+  background: rgba(255, 193, 7, 0.18);
+  color: #7a4d00;
+  border: 1px solid rgba(255, 193, 7, 0.35);
+}
+
+.highlight {
+  border-radius: 18px;
+  padding: 1.5rem;
+  text-align: center;
+  margin-bottom: 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.highlight--champion {
+  background: linear-gradient(135deg, rgba(255, 221, 64, 0.25), rgba(255, 105, 180, 0.25));
+  border: 1px solid rgba(255, 221, 64, 0.5);
+  box-shadow: 0 15px 35px rgba(255, 191, 0, 0.25);
+}
+
+.highlight--warning {
+  background: rgba(255, 193, 7, 0.15);
+  border: 1px solid rgba(255, 193, 7, 0.35);
+  box-shadow: 0 10px 25px rgba(255, 193, 7, 0.2);
+}
+
+.highlight h2 {
+  margin: 0;
+  font-size: clamp(1.5rem, 4vw, 2.25rem);
+  font-weight: 700;
+}
+
+.highlight__team {
+  font-size: clamp(1.75rem, 5vw, 2.75rem);
+  font-weight: 800;
+  margin: 0.5rem 0 0;
+}
+
+.highlight__details {
+  margin: 0.25rem 0 0;
+  font-size: 1rem;
+  opacity: 0.85;
+}
+
+.highlight__confetti {
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  margin: 0.75rem 0 0;
+}
+
+.inline-editor--compact {
+  padding: 0.6rem 0.75rem;
+}
+
+.playoff-bracket {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.playoff-note {
+  font-size: 0.85rem;
+  opacity: 0.75;
+  margin: 0;
+  text-align: center;
+}
+
+#playoff-bracket {
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 12px;
+}
+
+.playoff-final {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.playoff-final .match-score {
+  font-weight: 700;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+
+.admin-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.admin-login-form input {
+  font: inherit;
+  padding: 0.7rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.admin-login-form button {
+  align-self: flex-start;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 999px;
+  padding: 0.65rem 1.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-locked {
+  font-size: 0.9rem;
+  opacity: 0.7;
 }
 
 .rsvp-card,
@@ -210,12 +444,28 @@ body {
   gap: 0.5rem;
 }
 
+.team-list__members {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
 .content {
   flex: 1;
   display: grid;
   gap: 2rem;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   padding: clamp(1rem, 5vw, 4rem);
+}
+
+.content.content--single {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+}
+
+.content.content--single .panel {
+  width: min(760px, 100%);
 }
 
 .panel {
@@ -728,6 +978,57 @@ body {
 .playoff-list__stat {
   font-size: 0.9rem;
   opacity: 0.8;
+}
+
+.rule-list {
+  margin: 0.75rem 0 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.rule-list li {
+  line-height: 1.6;
+}
+
+.playoff-semis {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.playoff-semis__item {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.playoff-semis__team {
+  font-weight: 600;
+}
+
+.playoff-semis__score {
+  font-size: 0.95rem;
+  opacity: 0.85;
+}
+
+.playoff-semis__lock {
+  margin: 0.5rem 0 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #7a4d00;
+}
+
+.playoff-semis__pending {
+  font-size: 0.9rem;
+  opacity: 0.75;
 }
 
 .finalists {

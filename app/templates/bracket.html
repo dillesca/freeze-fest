@@ -6,27 +6,98 @@
     <title>{{ event.name }} • Bracket & Scores</title>
     <link rel="icon" type="image/png" href="{{ request.url_for('static', path='img/freezefest.png') }}">
     <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
+    {% if playoff_bracket %}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jquery-bracket@0.11.1/dist/jquery.bracket.min.css">
+    {% endif %}
   </head>
   <body>
+    {% set current_target = request.url.path %}
+    {% if request.url.query %}
+      {% set current_target = current_target + '?' + request.url.query %}
+    {% endif %}
     <header class="page-header">
       <div class="page-header__inner">
+        <div class="admin-banner" role="navigation" aria-label="Admin">
+          {% if is_admin %}
+          <form method="post" action="{{ request.url_for('admin_logout') }}" class="admin-banner__logout">
+            <input type="hidden" name="next" value="{{ current_target }}" />
+            <button type="submit">Log out</button>
+          </form>
+          {% else %}
+          <a href="{{ request.url_for('admin_login') }}?next={{ current_target | urlencode }}">Admin Login</a>
+          {% endif %}
+        </div>
         <div class="site-logo" role="presentation">
           <img src="{{ request.url_for('static', path='img/freezefest.png') }}" alt="Freeze Fest mascot" loading="lazy" />
         </div>
         <h1>{{ event.name }} Matchups</h1>
-        <p class="page-subtitle">Live bracket for {{ team_count }} teams • Cornhole · Bucket Golf · Kanban</p>
+        <p class="page-subtitle">Live bracket for {{ team_count }} teams • Cornhole · Bucket Golf · KanJam</p>
         <nav class="page-nav" aria-label="Primary">
           <a href="{{ request.url_for('index') }}">RSVP</a>
           <a href="{{ request.url_for('team_directory') }}">Register a Team</a>
           <a href="{{ request.url_for('bracket') }}" aria-current="page">View Bracket</a>
           <a href="{{ request.url_for('photos') }}">Photos</a>
           <a href="{{ request.url_for('events_page') }}">Past Events</a>
+          <a href="{{ request.url_for('game_rules') }}">Game Rules</a>
           <a href="{{ request.url_for('about_page') }}">About</a>
         </nav>
       </div>
     </header>
 
     <main class="content">
+      {% if is_admin %}
+      <section class="panel bracket-controls">
+        <h2>Tournament Controls</h2>
+        {% if tournament_message %}
+        <p class="flash {% if tournament_error %}flash--error{% else %}flash--success{% endif %}">{{ tournament_message }}</p>
+        {% endif %}
+        <div class="control-buttons">
+          <form method="post" action="{{ request.url_for('start_tournament') }}">
+            <button type="submit">Start / Regenerate Bracket</button>
+          </form>
+          <form method="post" action="{{ request.url_for('reset_tournament') }}">
+            <button type="submit" class="secondary">Reset Scores</button>
+          </form>
+          <form method="post" action="{{ request.url_for('start_playoffs') }}">
+            {% set semifinal_count = playoff_semifinals|length %}
+            {% if semifinal_count == 0 %}
+              {% set playoff_button_label = "Start Playoff Semifinal" %}
+            {% elif playoff_match %}
+              {% set playoff_button_label = "Recreate Beersbee Final" %}
+            {% else %}
+              {% set playoff_button_label = "Create Beersbee Final" %}
+            {% endif %}
+            <button type="submit" class="secondary">{{ playoff_button_label }}</button>
+          </form>
+          <form method="post" action="{{ request.url_for('admin_logout') }}" class="control-buttons__logout">
+            <input type="hidden" name="next" value="{{ current_target }}" />
+            <button type="submit" class="secondary">Log out</button>
+          </form>
+        </div>
+        <p class="control-hint">
+          Start regenerates the entire bracket using the current team list. Reset clears recorded scores but keeps the existing match order.
+        </p>
+      </section>
+      {% elif tournament_message %}
+      <section class="panel bracket-controls">
+        <p class="flash {% if tournament_error %}flash--error{% else %}flash--success{% endif %}">{{ tournament_message }}</p>
+      </section>
+      {% endif %}
+
+      {% if final_tie %}
+      <section class="highlight highlight--warning">
+        <h2>Final Needs a Tie-Breaker</h2>
+        <p>The Beersbee championship is still up for grabs—record a tie-breaker result to crown a winner.</p>
+      </section>
+      {% elif champion %}
+      <section class="highlight highlight--champion">
+        <h2>Freeze Fest Champions</h2>
+        <p class="highlight__team">{{ champion.name }}</p>
+        <p class="highlight__details">Won the Beersbee final {{ champion.scoreline }} over {{ champion.runner_up }}.</p>
+        <p class="highlight__confetti" aria-hidden="true">🎉</p>
+      </section>
+      {% endif %}
+
       <section class="panel next-match">
         <h2>Games In Play</h2>
         {% if next_matches %}
@@ -45,7 +116,8 @@
       </section>
 
       <section class="panel">
-        <h2>Game Rotation & Scores</h2>
+        <h2>Game Rotation &amp; Scores</h2>
+        <p class="control-hint">All three games run at the same time. Keep each station moving with the rotations below.</p>
         {% if matches_by_game %}
         <div class="game-schedule" role="list">
           {% for block in matches_by_game %}
@@ -77,7 +149,47 @@
                 </div>
                 {% if match.status == 'completed' %}
                 <p class="match-score">Final: {{ match.score1 }} – {{ match.score2 }}</p>
+                {% if is_admin %}
+                <details class="inline-editor inline-editor--compact">
+                  <summary>Edit score</summary>
+                  <form method="post" action="{{ request.url_for('record_score', match_id=match.id) }}" class="match-score-form">
+                    <label>
+                      {{ match.team1 or 'Team 1' }}
+                      <input type="number" name="score_team1" min="0" value="{{ match.score1 if match.score1 is not none else '' }}" required />
+                    </label>
+                    {% if match.team1_id == match.team2_id and block.game == 'Bucket Golf' %}
+                    <input type="hidden" name="score_team2" value="{{ match.score2 if match.score2 is not none else 0 }}" />
+                    {% else %}
+                    <label>
+                      {{ match.team2 or 'Team 2' }}
+                      <input type="number" name="score_team2" min="0" value="{{ match.score2 if match.score2 is not none else '' }}" required />
+                    </label>
+                    {% endif %}
+                    <button type="submit">Save score</button>
+                  </form>
+                </details>
+                {% endif %}
                 {% elif match.status == 'in_progress' %}
+                {% if is_admin %}
+                <details class="inline-editor inline-editor--compact" open>
+                  <summary>Report score</summary>
+                  <form method="post" action="{{ request.url_for('record_score', match_id=match.id) }}" class="match-score-form">
+                    <label>
+                      {{ match.team1 or 'Team 1' }}
+                      <input type="number" name="score_team1" min="0" value="{{ match.score1 if match.score1 is not none else '' }}" required />
+                    </label>
+                    {% if match.team1_id == match.team2_id and block.game == 'Bucket Golf' %}
+                    <input type="hidden" name="score_team2" value="0" />
+                    {% else %}
+                    <label>
+                      {{ match.team2 or 'Team 2' }}
+                      <input type="number" name="score_team2" min="0" value="{{ match.score2 if match.score2 is not none else '' }}" required />
+                    </label>
+                    {% endif %}
+                    <button type="submit">Submit score</button>
+                  </form>
+                </details>
+                {% else %}
                 <form method="post" action="{{ request.url_for('record_score', match_id=match.id) }}" class="match-score-form">
                   <label>
                     {{ match.team1 or 'Team 1' }}
@@ -91,8 +203,9 @@
                     <input type="number" name="score_team2" min="0" value="{{ match.score2 if match.score2 is not none else '' }}" required />
                   </label>
                   {% endif %}
-                  <button type="submit">Submit Score</button>
+                  <button type="submit">Submit score</button>
                 </form>
+                {% endif %}
                 {% else %}
                 <p class="match-note">Waiting for earlier games.</p>
                 {% endif %}
@@ -130,13 +243,14 @@
 
       <section class="panel">
         <h2>Playoff Picture</h2>
-        <p>Top four teams advance to a bucket golf showdown. Lowest two scores move on to a cornhole final. If there’s a tie for second, tied teams replay the course hole-by-hole until one wins a hole.</p>
+        <p>Top four teams advance to a bucket golf semifinal. The best two scores from that round move on to the Beersbee final. If there’s a tie for the second spot, tied teams replay the course hole-by-hole until one wins a hole.</p>
         {% if top_four %}
         <ol class="playoff-list">
           {% for row in top_four %}
           <li class="playoff-list__item">
             <span class="playoff-list__name">{{ row.name }}</span>
             {% if bucket_pool_mode %}
+            <span class="playoff-list__stat">Record: {{ row.wins }}-{{ row.games - row.wins }}</span>
             <span class="playoff-list__stat">Bucket score: {{ row.bucket_score if row.bucket_score is not none else '—' }}</span>
             {% else %}
             <span class="playoff-list__stat">Record: {{ row.wins }}-{{ row.games - row.wins }}</span>
@@ -148,11 +262,115 @@
         <p class="empty-state">Need results before rankings can be produced.</p>
         {% endif %}
 
+        {% if playoff_semifinals %}
+        {% if playoff_semifinals_tie %}
+        <p class="flash flash--warning">Two semifinal teams are tied for the last Beersbee slot. Run a sudden-death bucket golf playoff to decide the finalist, then update the winning score.</p>
+        {% elif playoff_semifinals_complete and not playoff_match %}
+        <p class="flash flash--success">Semifinals complete. Create the Beersbee final once any tie-breakers are resolved.</p>
+        {% endif %}
+        <h3>Bucket Golf Semifinal Scores</h3>
+        {% if not group_stage_complete %}
+        <p class="playoff-semis__lock">Finish every group-stage match before submitting semifinal scores.</p>
+        {% endif %}
+        <ul class="playoff-semis">
+          {% for match in playoff_semifinals %}
+          <li class="playoff-semis__item">
+            <span class="playoff-semis__team">{{ match.team }}</span>
+            {% if not group_stage_complete %}
+            <span class="playoff-semis__pending">Awaiting completion of round-robin play.</span>
+            {% elif match.score is not none %}
+            <span class="playoff-semis__score">Score: {{ match.score }}</span>
+            {% if is_admin %}
+            <details class="inline-editor inline-editor--compact">
+              <summary>Edit score</summary>
+              <form method="post" action="{{ request.url_for('record_score', match_id=match.id) }}" class="match-score-form">
+                <label>
+                  {{ match.team }}
+                  <input type="number" name="score_team1" min="0" value="{{ match.score }}" required />
+                </label>
+                <input type="hidden" name="score_team2" value="0" />
+                <button type="submit">Save score</button>
+              </form>
+            </details>
+            {% endif %}
+            {% else %}
+            <form method="post" action="{{ request.url_for('record_score', match_id=match.id) }}" class="match-score-form">
+              <label>
+                {{ match.team }}
+                <input type="number" name="score_team1" min="0" required />
+              </label>
+              <input type="hidden" name="score_team2" value="0" />
+              <button type="submit">Submit score</button>
+            </form>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
         {% if finalists and finalists|length == 2 %}
         <h3>Projected Finalists</h3>
-        <p class="finalists">{{ finalists[0].name }} vs {{ finalists[1].name }} (Cornhole final)</p>
+        <p class="finalists">{{ finalists[0].name }} vs {{ finalists[1].name }} (Beersbee final)</p>
         {% endif %}
       </section>
+
+      {% if playoff_bracket %}
+      <section class="panel playoff-bracket">
+        <h2>Playoff Final</h2>
+        <div id="playoff-bracket"></div>
+        {% if playoff_match %}
+        <div class="playoff-final">
+          {% if playoff_match.score1 is not none and playoff_match.score2 is not none %}
+          <p class="match-score">Final: {{ playoff_match.team1 }} {{ playoff_match.score1 }} – {{ playoff_match.score2 }} {{ playoff_match.team2 }}</p>
+          {% if is_admin %}
+          <details class="inline-editor inline-editor--compact">
+            <summary>Edit playoff score</summary>
+            <form method="post" action="{{ request.url_for('record_score', match_id=playoff_match.id) }}" class="match-score-form">
+              <label>
+                {{ playoff_match.team1 }}
+                <input type="number" name="score_team1" min="0" value="{{ playoff_match.score1 }}" required />
+              </label>
+              <label>
+                {{ playoff_match.team2 }}
+                <input type="number" name="score_team2" min="0" value="{{ playoff_match.score2 }}" required />
+              </label>
+              <button type="submit">Save score</button>
+            </form>
+          </details>
+          {% endif %}
+          {% else %}
+          <form method="post" action="{{ request.url_for('record_score', match_id=playoff_match.id) }}" class="match-score-form">
+            <label>
+              {{ playoff_match.team1 }}
+              <input type="number" name="score_team1" min="0" required />
+            </label>
+            <label>
+              {{ playoff_match.team2 }}
+              <input type="number" name="score_team2" min="0" required />
+            </label>
+            <button type="submit">Submit score</button>
+          </form>
+          {% endif %}
+        </div>
+        {% endif %}
+        <p class="playoff-note">Bucket golf semifinal decides the finalists: the two best scores advance to the Beersbee championship. Break any tie for the second slot with sudden-death extra holes.</p>
+      </section>
+      {% endif %}
     </main>
+    {% if playoff_bracket %}
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-eKhayi8LEQwp4NKxN+CfCh+3qOVUtJn3QNZ0TciWLP4=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery-bracket@0.11.1/dist/jquery.bracket.min.js"></script>
+    <script>
+      $(function () {
+        $('#playoff-bracket').bracket({
+          init: {{ playoff_bracket|tojson }},
+          teamWidth: 180,
+          scoreWidth: 40,
+          matchMargin: 30,
+          roundMargin: 40,
+        });
+      });
+    </script>
+    {% endif %}
   </body>
 </html>

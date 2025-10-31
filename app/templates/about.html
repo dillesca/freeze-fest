@@ -8,8 +8,22 @@
     <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
   </head>
   <body>
+    {% set current_target = request.url.path %}
+    {% if request.url.query %}
+      {% set current_target = current_target + '?' + request.url.query %}
+    {% endif %}
     <header class="page-header">
       <div class="page-header__inner">
+        <div class="admin-banner" role="navigation" aria-label="Admin">
+          {% if is_admin %}
+          <form method="post" action="{{ request.url_for('admin_logout') }}" class="admin-banner__logout">
+            <input type="hidden" name="next" value="{{ current_target }}" />
+            <button type="submit">Log out</button>
+          </form>
+          {% else %}
+          <a href="{{ request.url_for('admin_login') }}?next={{ current_target | urlencode }}">Admin Login</a>
+          {% endif %}
+        </div>
         <div class="site-logo" role="presentation">
           <img src="{{ request.url_for('static', path='img/freezefest.png') }}" alt="Freeze Fest mascot: a cartoon mosquito freezing inside a circle" loading="lazy" />
         </div>
@@ -23,6 +37,7 @@
           <a href="{{ request.url_for('bracket') }}">View Bracket</a>
           <a href="{{ request.url_for('photos') }}">Photos</a>
           <a href="{{ request.url_for('events_page') }}">Past Events</a>
+          <a href="{{ request.url_for('game_rules') }}">Game Rules</a>
           <a href="{{ request.url_for('about_page') }}" aria-current="page">About</a>
         </nav>
       </div>
@@ -32,13 +47,13 @@
       <article class="panel">
         <h2>How It All Started</h2>
         <p>
-          Freeze Fest traces its roots back to an unmarked afternoon in the 2010s. After a long summer of swatting bugs, my father Erik Illescas—pleasantly surprised and celebrating solo—realized the mosquitoes had finally disappeared and sent a jubilant selfie to the group chat. The moment became legend: a spontaneous celebration of the first freeze.
+          Freeze Fest traces its roots back to an unmarked afternoon in the 2010s. After a long summer of swatting bugs, my father Erik Illescas, pleasantly surprised and celebrating solo, realized the mosquitoes had finally disappeared and sent a jubilant selfie to the group chat. The moment became legend: a spontaneous celebration of the first freeze.
         </p>
         <p>
-          The following year, the same message surfaced with a new name—<strong>Freeze Fest</strong>. Word spread, and the invitation list grew so the original celebrator didn’t have to toast the victory over mosquitoes alone. Soon, friendly games turned into an annual tournament, complete with brackets, trophies, and a whole lot of laughter.
+          The following year, the same message surfaced with a new name, <strong>Freeze Fest</strong>. Word spread, and the invitation list grew so the original celebrator didn’t have to toast the victory over mosquitoes alone. Soon, friendly games turned into an annual tournament, complete with brackets, trophies, and a whole lot of laughter.
         </p>
         <p>
-          Today, Freeze Fest marks the turning point of fall. We gather the same core crew (plus a few new faces each year) to share food, play cornhole, bucket golf, and kanban, and appreciate the crisp air together. No matter the bracket results, the celebration stays rooted in gratitude for good company—and bug-free evenings.
+          Today, Freeze Fest marks the turning point of fall. We gather the same core crew (plus a few new faces each year) to share food, play cornhole, bucket golf, and KanJam, and appreciate the crisp air together. No matter the bracket results, the celebration stays rooted in gratitude for good company and bug-free evenings.
         </p>
         <p class="form-success">
           Join us in the tradition. Bring a teammate, bring your cheer, and help us welcome the freeze.
