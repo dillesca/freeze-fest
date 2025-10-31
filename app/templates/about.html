@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>About Freeze Fest</title>
+    <link rel="icon" type="image/png" href="{{ request.url_for('static', path='img/freezefest.png') }}">
+    <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-header__inner">
+        <div class="site-logo" role="presentation">
+          <img src="{{ request.url_for('static', path='img/freezefest.png') }}" alt="Freeze Fest mascot: a cartoon mosquito freezing inside a circle" loading="lazy" />
+        </div>
+        <h1>About Freeze Fest</h1>
+        <p class="page-subtitle">
+          An annual celebration of the first crisp fall days—and the moment mosquitoes finally leave us alone.
+        </p>
+        <nav class="page-nav" aria-label="Primary">
+          <a href="{{ request.url_for('index') }}">RSVP</a>
+          <a href="{{ request.url_for('team_directory') }}">Register a Team</a>
+          <a href="{{ request.url_for('bracket') }}">View Bracket</a>
+          <a href="{{ request.url_for('photos') }}">Photos</a>
+          <a href="{{ request.url_for('events_page') }}">Past Events</a>
+          <a href="{{ request.url_for('about_page') }}" aria-current="page">About</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="content content--single">
+      <article class="panel">
+        <h2>How It All Started</h2>
+        <p>
+          Freeze Fest traces its roots back to an unmarked afternoon in the 2010s. After a long summer of swatting, a lone friend realized the mosquitoes had finally disappeared and sent a jubilant selfie to the group chat. The moment became legend: a spontaneous celebration of the first freeze.
+        </p>
+        <p>
+          The following year, the same message surfaced with a new name—<strong>Freeze Fest</strong>. Word spread, and the invitation list grew so the original celebrator didn’t have to toast the victory over mosquitoes alone. Soon, friendly games turned into an annual tournament, complete with brackets, trophies, and a whole lot of laughter.
+        </p>
+        <p>
+          Today, Freeze Fest marks the turning point of fall. We gather the same core crew (plus a few new faces each year) to share food, play cornhole, bucket golf, and kanban, and appreciate the crisp air together. No matter the bracket results, the celebration stays rooted in gratitude for good company—and bug-free evenings.
+        </p>
+        <p class="form-success">
+          Join us in the tradition. Bring a teammate, bring your cheer, and help us welcome the freeze.
+        </p>
+      </article>
+    </main>
+
+    <footer class="page-footer">
+      <p>
+        Freeze Fest is fueled by friends, snacks, and the joy of mosquito-free evenings.
+      </p>
+    </footer>
+  </body>
+</html>
+

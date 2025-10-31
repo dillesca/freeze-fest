@@ -23,6 +23,7 @@
           <a href="{{ request.url_for('bracket') }}">View Bracket</a>
           <a href="{{ request.url_for('photos') }}">Photos</a>
           <a href="{{ request.url_for('events_page') }}">Past Events</a>
+          <a href="{{ request.url_for('about_page') }}">About</a>
         </nav>
       </div>
     </header>
@@ -30,6 +31,9 @@
     <main class="content">
       <section class="panel">
         <h2>Create a Team</h2>
+        <p class="section-intro">
+          Teams compete in pairs — one partner and one partner only. Pick a name that represents both of you, then submit!
+        </p>
         <form method="post" action="{{ request.url_for('create_team') }}" class="participants-form team-form">
           <label for="team-name">Team name</label>
           <input
@@ -84,11 +88,49 @@
         <ul class="free-agent-list">
           {% for agent in free_agents_pending %}
           <li class="free-agent-list__item">
-            <span class="free-agent-name">{{ agent.name }}</span>
-            <span class="free-agent-meta">Joined {{ agent.created_at.strftime('%b %d, %I:%M %p') }}</span>
-            {% if agent.note %}
-            <p class="free-agent-note">“{{ agent.note }}”</p>
-            {% endif %}
+            <div class="free-agent-card">
+              <span class="free-agent-name">{{ agent.name }}</span>
+              <span class="free-agent-meta">Joined {{ agent.created_at.strftime('%b %d, %I:%M %p') }}</span>
+              {% if agent.note %}
+              <p class="free-agent-note">“{{ agent.note }}”</p>
+              {% endif %}
+            </div>
+            <details class="inline-editor">
+              <summary>Manage {{ agent.name }}</summary>
+              <form method="post" action="{{ request.url_for('update_free_agent', agent_id=agent.id) }}" class="inline-form">
+                <label for="agent-name-{{ agent.id }}">Full name</label>
+                <input id="agent-name-{{ agent.id }}" name="name" type="text" value="{{ agent.name }}" required minlength="1" />
+
+                <label for="agent-note-{{ agent.id }}">Notes</label>
+                <textarea id="agent-note-{{ agent.id }}" name="note" rows="2">{{ agent.note or '' }}</textarea>
+
+                <label for="agent-status-{{ agent.id }}">Status</label>
+                <select id="agent-status-{{ agent.id }}" name="status">
+                  <option value="pending" {% if agent.status == 'pending' %}selected{% endif %}>Pending</option>
+                  <option value="paired" {% if agent.status == 'paired' %}selected{% endif %}>Paired</option>
+                </select>
+
+                <label for="agent-team-{{ agent.id }}">Assigned team (optional)</label>
+                <select id="agent-team-{{ agent.id }}" name="team_id">
+                  <option value="">-- No team --</option>
+                  {% for team_id, team_name in team_lookup.items() %}
+                  <option value="{{ team_id }}" {% if agent.team_id == team_id %}selected{% endif %}>{{ team_name }}</option>
+                  {% endfor %}
+                </select>
+
+                <div class="inline-actions">
+                  <button type="submit">Save changes</button>
+                </div>
+              </form>
+              <form
+                method="post"
+                action="{{ request.url_for('delete_free_agent', agent_id=agent.id) }}"
+                class="inline-form inline-form--danger"
+                onsubmit="return confirm('Remove this free agent?');"
+              >
+                <button type="submit">Delete free agent</button>
+              </form>
+            </details>
           </li>
           {% endfor %}
         </ul>
@@ -101,8 +143,46 @@
         <ul class="free-agent-list">
           {% for agent in free_agents_paired %}
           <li class="free-agent-list__item free-agent-list__item--paired">
-            <span class="free-agent-name">{{ agent.name }}</span>
-            <span class="free-agent-meta">Now playing on {{ team_lookup.get(agent.team_id, 'a new team') }}</span>
+            <div class="free-agent-card">
+              <span class="free-agent-name">{{ agent.name }}</span>
+              <span class="free-agent-meta">Now playing on {{ team_lookup.get(agent.team_id, 'a new team') }}</span>
+            </div>
+            <details class="inline-editor">
+              <summary>Manage {{ agent.name }}</summary>
+              <form method="post" action="{{ request.url_for('update_free_agent', agent_id=agent.id) }}" class="inline-form">
+                <label for="agent-name-{{ agent.id }}">Full name</label>
+                <input id="agent-name-{{ agent.id }}" name="name" type="text" value="{{ agent.name }}" required minlength="1" />
+
+                <label for="agent-note-{{ agent.id }}">Notes</label>
+                <textarea id="agent-note-{{ agent.id }}" name="note" rows="2">{{ agent.note or '' }}</textarea>
+
+                <label for="agent-status-{{ agent.id }}">Status</label>
+                <select id="agent-status-{{ agent.id }}" name="status">
+                  <option value="pending" {% if agent.status == 'pending' %}selected{% endif %}>Pending</option>
+                  <option value="paired" {% if agent.status == 'paired' %}selected{% endif %}>Paired</option>
+                </select>
+
+                <label for="agent-team-{{ agent.id }}">Assigned team (optional)</label>
+                <select id="agent-team-{{ agent.id }}" name="team_id">
+                  <option value="">-- No team --</option>
+                  {% for team_id, team_name in team_lookup.items() %}
+                  <option value="{{ team_id }}" {% if agent.team_id == team_id %}selected{% endif %}>{{ team_name }}</option>
+                  {% endfor %}
+                </select>
+
+                <div class="inline-actions">
+                  <button type="submit">Save changes</button>
+                </div>
+              </form>
+              <form
+                method="post"
+                action="{{ request.url_for('delete_free_agent', agent_id=agent.id) }}"
+                class="inline-form inline-form--danger"
+                onsubmit="return confirm('Remove this free agent?');"
+              >
+                <button type="submit">Delete free agent</button>
+              </form>
+            </details>
           </li>
           {% endfor %}
         </ul>
@@ -117,8 +197,28 @@
         <ul class="team-list" aria-live="polite">
           {% for team in teams %}
           <li class="team-list__item">
-            <span class="team-list__name">{{ team.name }}</span>
-            <span class="team-list__meta">Added {{ team.created_at.strftime('%b %d, %Y %I:%M %p') }}</span>
+            <div class="team-list__header">
+              <span class="team-list__name">{{ team.name }}</span>
+              <span class="team-list__meta">Added {{ team.created_at.strftime('%b %d, %Y %I:%M %p') }}</span>
+            </div>
+            <details class="inline-editor">
+              <summary>Manage {{ team.name }}</summary>
+              <form method="post" action="{{ request.url_for('update_team', team_id=team.id) }}" class="inline-form">
+                <label for="team-edit-name-{{ team.id }}">Team name</label>
+                <input id="team-edit-name-{{ team.id }}" name="name" type="text" value="{{ team.name }}" minlength="2" required />
+                <div class="inline-actions">
+                  <button type="submit">Save changes</button>
+                </div>
+              </form>
+              <form
+                method="post"
+                action="{{ request.url_for('delete_team', team_id=team.id) }}"
+                class="inline-form inline-form--danger"
+                onsubmit="return confirm('Delete this team? Matches for the event will be regenerated.');"
+              >
+                <button type="submit">Delete team</button>
+              </form>
+            </details>
           </li>
           {% endfor %}
         </ul>

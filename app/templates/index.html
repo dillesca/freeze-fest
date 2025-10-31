@@ -35,6 +35,7 @@
           <a href="{{ request.url_for('bracket') }}">View Bracket</a>
           <a href="{{ request.url_for('photos') }}">Photos</a>
           <a href="{{ request.url_for('events_page') }}">Past Events</a>
+          <a href="{{ request.url_for('about_page') }}">About</a>
         </nav>
       </div>
     </header>
@@ -59,8 +60,12 @@
         {% if rsvp_error %}
         <p class="form-error">{{ rsvp_error }}</p>
         {% endif %}
-        {% if rsvp_success %}
+        {% if rsvp_status == 'saved' %}
         <p class="form-success">Thanks! See you at Freeze Fest.</p>
+        {% elif rsvp_status == 'updated' %}
+        <p class="form-success">RSVP updated.</p>
+        {% elif rsvp_status == 'deleted' %}
+        <p class="form-success">RSVP removed.</p>
         {% endif %}
       </section>
 
@@ -94,11 +99,38 @@
         <ul class="rsvp-list">
           {% for entry in rsvps %}
           <li>
-            <span class="rsvp-name">{{ entry.name }}</span>
-            <span class="rsvp-meta">{{ entry.guests }} attending · RSVP {{ entry.created_at.strftime('%b %d, %I:%M %p') }}</span>
-            {% if entry.message %}
-            <p class="rsvp-note">“{{ entry.message }}”</p>
-            {% endif %}
+            <div class="rsvp-card">
+              <span class="rsvp-name">{{ entry.name }}</span>
+              <span class="rsvp-meta">{{ entry.guests }} attending · RSVP {{ entry.created_at.strftime('%b %d, %I:%M %p') }}</span>
+              {% if entry.message %}
+              <p class="rsvp-note">“{{ entry.message }}”</p>
+              {% endif %}
+            </div>
+            <details class="inline-editor">
+              <summary>Manage RSVP</summary>
+              <form method="post" action="{{ request.url_for('update_rsvp', rsvp_id=entry.id) }}" class="inline-form">
+                <label for="rsvp-edit-name-{{ entry.id }}">Full name</label>
+                <input id="rsvp-edit-name-{{ entry.id }}" name="name" type="text" value="{{ entry.name }}" required minlength="1" />
+
+                <label for="rsvp-edit-guests-{{ entry.id }}">Guests</label>
+                <input id="rsvp-edit-guests-{{ entry.id }}" name="guests" type="number" min="1" value="{{ entry.guests }}" required />
+
+                <label for="rsvp-edit-message-{{ entry.id }}">Message</label>
+                <textarea id="rsvp-edit-message-{{ entry.id }}" name="message" rows="2">{{ entry.message or '' }}</textarea>
+
+                <div class="inline-actions">
+                  <button type="submit">Save changes</button>
+                </div>
+              </form>
+              <form
+                method="post"
+                action="{{ request.url_for('delete_rsvp', rsvp_id=entry.id) }}"
+                class="inline-form inline-form--danger"
+                onsubmit="return confirm('Remove this RSVP?');"
+              >
+                <button type="submit">Delete RSVP</button>
+              </form>
+            </details>
           </li>
           {% endfor %}
         </ul>
@@ -112,6 +144,9 @@
     <footer class="page-footer">
       <p>
         Built for Freeze Fest 2025. Questions? Email hello@freezefest.com.
+      </p>
+      <p>
+        Curious how it began? <a href="{{ request.url_for('about_page') }}">Read the Freeze Fest story →</a>
       </p>
     </footer>
 
