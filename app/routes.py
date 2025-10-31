@@ -130,6 +130,7 @@ async def bracket_page(request: Request, session: Session = Depends(get_session)
         "playoff-created": ("Playoff final created. Report scores when ready.", False),
         "playoff-need-scores": ("Bucket golf scores aren’t ready yet—finish group play first.", True),
         "playoff-tiebreak": ("Tie detected for the final slot. Run a tie-breaker before creating the playoff match.", True),
+        "playoff-group-incomplete": ("Finish every round-robin match before starting the semifinal round.", True),
         "semis-created": ("Playoff semifinal round created. Post the new bucket golf scores below.", False),
         "semis-pending": ("Finish every semifinal score before creating the final.", True),
         "semis-need-teams": ("Need at least four teams with results before starting the semifinals.", True),
@@ -233,6 +234,7 @@ async def start_playoffs(request: Request, session: Session = Depends(get_sessio
     event = get_active_event(session)
     snapshot = _schedule_context(session)
     leaderboard = snapshot["leaderboard"]
+    group_stage_complete = snapshot.get("group_stage_complete", False)
     semifinal_matches = session.exec(
         select(Match)
         .where(
@@ -252,6 +254,9 @@ async def start_playoffs(request: Request, session: Session = Depends(get_sessio
     ).all()
 
     if not semifinal_matches:
+        if not group_stage_complete:
+            redirect_url = str(request.url_for("bracket")) + "?playoff=playoff-group-incomplete"
+            return RedirectResponse(redirect_url, status_code=303)
         if final_matches:
             for match in final_matches:
                 session.delete(match)

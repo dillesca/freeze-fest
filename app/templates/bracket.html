@@ -67,7 +67,8 @@
             {% else %}
               {% set playoff_button_label = "Create Beersbee Final" %}
             {% endif %}
-            <button type="submit" class="secondary">{{ playoff_button_label }}</button>
+            {% set button_disabled = (semifinal_count == 0 and not group_stage_complete) %}
+            <button type="submit" class="secondary" {% if button_disabled %}disabled{% endif %}>{{ playoff_button_label }}</button>
           </form>
           <form method="post" action="{{ request.url_for('admin_logout') }}" class="control-buttons__logout">
             <input type="hidden" name="next" value="{{ current_target }}" />
@@ -77,6 +78,9 @@
         <p class="control-hint">
           Start regenerates the entire bracket using the current team list. Reset clears recorded scores but keeps the existing match order.
         </p>
+        {% if button_disabled and semifinal_count == 0 %}
+        <p class="control-hint control-hint--warning">Finish every round-robin match before launching the semifinal round.</p>
+        {% endif %}
       </section>
       {% elif tournament_message %}
       <section class="panel bracket-controls">

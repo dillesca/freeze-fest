@@ -194,6 +194,12 @@ body {
   background: #555;
 }
 
+.control-buttons form button[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .control-buttons__logout {
   margin-left: auto;
 }
@@ -207,6 +213,12 @@ body {
   margin: 0;
   font-size: 0.85rem;
   opacity: 0.7;
+}
+
+.control-hint--warning {
+  color: #7a4d00;
+  opacity: 1;
+  font-weight: 600;
 }
 
 .flash {
@@ -458,14 +470,12 @@ body {
 }
 
 .content.content--single {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2rem;
+  display: block;
 }
 
 .content.content--single .panel {
   width: min(760px, 100%);
+  margin: 0 auto 2rem;
 }
 
 .panel {
