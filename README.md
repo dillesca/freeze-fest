@@ -1,6 +1,6 @@
 # Freeze Fest 2025 RSVP
 
-A lightweight FastAPI web app for the 2025 Freeze Fest triathlon (November 15, 2025, 1:00 PM). Guests can browse event details, RSVP, upload photos, and manage teams. All data is stored in PostgreSQL (local Docker Compose or RDS/Aurora in AWS).
+A lightweight FastAPI web app for the 2025 Freeze Fest triathlon (November 15, 2025, 1:00 PM). Guests can browse event details, RSVP, upload photos, and manage teams. All data is stored in PostgreSQL (local Docker Compose or Cloud SQL in Google Cloud).
 
 ## Quick start
 
@@ -49,35 +49,43 @@ The tests point `DATABASE_URL` at a temporary SQLite file to stay fast and isola
 
 - `.env.example` defines defaults for the Postgres service (`POSTGRES_USER/PASSWORD/DB`).
 - `docker compose up -d postgres` starts the DB only; `docker compose up --build` runs API + DB together.
-- Override `DATABASE_URL` per environment using `.env` or ECS task definitions.
+- Override `DATABASE_URL` per environment using `.env` or deployment-time configuration (e.g., Cloud Run secrets or env vars).
 
 ## Project structure
 
 - `app/` – FastAPI application package.
 - `docker-compose.yml` / `.env.example` – local containers + env vars.
-- `deploy/` – ECS task definition templates consumed by GitHub Actions.
-- `.github/workflows/` – CI (`ci.yml`), production deploy (`deploy-prod.yml`), and the main-branch guard.
+- `.github/workflows/` – CI (`ci.yml`) and the main-branch guard workflow.
 - `tests/` – pytest suite using an ephemeral SQLite DB.
 - `requirements.txt`, `Dockerfile`, etc.
 
 ## CI/CD
 
 - `.github/workflows/ci.yml` installs dependencies, compiles modules, and runs `python -m pytest` on every push/PR.
-- `.github/workflows/deploy-prod.yml` builds/pushes the Docker image and updates the production ECS service on pushes (or manual dispatch) to `main`.
 - `.github/workflows/main-branch-guard.yml` enforces the `ready-for-prod` label before PRs can merge into `main`.
+- Cloud Run deployments are triggered manually via `gcloud run deploy` (or via Cloud Build triggers) using the image published to Artifact Registry.
 
 ## Branch strategy
 
 1. Branch from `main` for every feature (`git checkout main && git pull && git checkout -b feature/foo`).
 2. Open a pull request targeting `main` and keep pushing to the feature branch until CI is green and the review is approved (`ready-for-prod` label still gates the PR).
 3. After approval, run the **Promote To Develop** workflow from the Actions tab and set `source_branch` to your feature branch. The workflow merges that branch into `develop`, which in turn triggers the normal CI run and the automatic dev deployment.
-4. Once the dev environment is validated, trigger the **Promote To Main** workflow (source defaults to `develop`). That merge kicks off the production deployment workflow.
+4. Once the dev environment is validated, trigger the **Promote To Main** workflow (source defaults to `develop`). That merge keeps `main` up to date, after which you can redeploy Cloud Run from the new revision.
 5. Delete the feature branch after promotion to keep history tidy.
 
-## Required GitHub secrets
+## Deployment (Cloud Run)
 
-- `AWS_ROLE_ARN` – IAM role GitHub Actions assumes (via OIDC) for ECS/ECR operations.
-- `ECR_REGISTRY` – e.g., `123456789012.dkr.ecr.us-east-1.amazonaws.com`.
-- `ECR_REPOSITORY` – the ECR repo name (e.g., `freeze-fest`).
+Build and push the container image to Artifact Registry, then deploy:
 
-Customize `deploy/task-def.json` with your execution/task role ARNs, log group, env vars (including production `DATABASE_URL`), and ECS clusters/services (`freeze-fest-prod`, optional dev/staging if you add them back).
+```bash
+gcloud builds submit --tag us-west1-docker.pkg.dev/<PROJECT_ID>/freeze-fest/freeze-fest:latest
+
+gcloud run deploy freeze-fest \
+  --image us-west1-docker.pkg.dev/<PROJECT_ID>/freeze-fest/freeze-fest:latest \
+  --region us-west1 \
+  --service-account freeze-fest-sa@<PROJECT_ID>.iam.gserviceaccount.com \
+  --add-cloudsql-instances <PROJECT_ID>:us-west1:freeze-fest-pg \
+  --set-env-vars DATABASE_URL="postgresql+psycopg2://freeze:<PASSWORD>@/freeze_db?host=/cloudsql/<PROJECT_ID>:us-west1:freeze-fest-pg"
+```
+
+Replace the placeholders with your project ID, database password, and Cloud SQL instance details. Map `DATABASE_URL` from Secret Manager if you prefer not to inline credentials.

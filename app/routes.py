@@ -18,10 +18,13 @@ BASE_DIR = Path(__file__).resolve().parent
 router = APIRouter()
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
+ALLOWED_FREE_AGENT_STATUSES = {"pending", "paired"}
+
+
 @router.get("/", response_class=HTMLResponse, name="index")
 async def index(request: Request, session: Session = Depends(get_session)):
-    success = request.query_params.get("rsvp") == "saved"
-    context = _home_context(session, rsvp_success=success)
+    status = request.query_params.get("rsvp")
+    context = _home_context(session, rsvp_status=status)
     return templates.TemplateResponse(request, "index.html", context)
 
 
@@ -43,6 +46,13 @@ async def events_page(request: Request, session: Session = Depends(get_session))
     cards = _events_context(session)
     context = {"events": cards}
     return templates.TemplateResponse(request, "events.html", context)
+
+
+@router.get("/about", response_class=HTMLResponse, name="about_page")
+async def about_page(request: Request, session: Session = Depends(get_session)):
+    event = get_active_event(session)
+    context = {"event": event}
+    return templates.TemplateResponse(request, "about.html", context)
 
 
 @router.post("/rsvp", response_class=HTMLResponse, name="submit_rsvp")
@@ -77,6 +87,49 @@ async def submit_rsvp(
     session.commit()
 
     redirect_url = str(request.url_for("index")) + "?rsvp=saved"
+    return RedirectResponse(redirect_url, status_code=303)
+
+
+@router.post("/rsvp/{rsvp_id}/update", response_class=HTMLResponse, name="update_rsvp")
+async def update_rsvp(
+    request: Request,
+    rsvp_id: int,
+    session: Session = Depends(get_session),
+    name: str = Form(...),
+    guests: int = Form(...),
+    message: str | None = Form(default=None),
+):
+    rsvp = session.get(RSVP, rsvp_id)
+    if not rsvp:
+        raise HTTPException(status_code=404, detail="RSVP not found")
+
+    trimmed_name = name.strip()
+    if not trimmed_name:
+        context = _home_context(session, rsvp_error="Name is required.")
+        return templates.TemplateResponse(request, "index.html", context, status_code=400)
+    if guests < 1:
+        context = _home_context(session, rsvp_error="Please include at least one guest.")
+        return templates.TemplateResponse(request, "index.html", context, status_code=400)
+
+    rsvp.name = trimmed_name
+    rsvp.guests = guests
+    rsvp.message = message.strip() if message else None
+    session.add(rsvp)
+    session.commit()
+
+    redirect_url = str(request.url_for("index")) + "?rsvp=updated"
+    return RedirectResponse(redirect_url, status_code=303)
+
+
+@router.post("/rsvp/{rsvp_id}/delete", response_class=HTMLResponse, name="delete_rsvp")
+async def delete_rsvp(request: Request, rsvp_id: int, session: Session = Depends(get_session)):
+    rsvp = session.get(RSVP, rsvp_id)
+    if not rsvp:
+        raise HTTPException(status_code=404, detail="RSVP not found")
+    session.delete(rsvp)
+    session.commit()
+
+    redirect_url = str(request.url_for("index")) + "?rsvp=deleted"
     return RedirectResponse(redirect_url, status_code=303)
 
 
@@ -120,20 +173,40 @@ async def upload_photo(
 @router.get("/teams", response_class=HTMLResponse, name="team_directory")
 async def team_directory(request: Request, session: Session = Depends(get_session)):
     success_message = None
+    form_error = None
+
     if request.query_params.get("created") == "1":
         success_message = "Team added successfully."
 
     context = _team_context(
         session=session,
-        form_error=None,
+        form_error=form_error,
         form_value="",
         success_message=success_message,
     )
+
+    team_status = request.query_params.get("team")
+    if team_status == "updated":
+        context["success_message"] = "Team updated."
+    elif team_status == "deleted":
+        context["success_message"] = "Team removed."
+    elif team_status == "exists":
+        context["form_error"] = "That team name already exists."
+    elif team_status == "invalid":
+        context["form_error"] = "Team names must be at least two characters long."
+
     flag = request.query_params.get("free_agent")
     if flag == "added":
         context["free_agent_success"] = "Added to the free-agent pool. We'll match you up soon."
     elif flag == "paired":
         context["free_agent_success"] = "Matched free agents and created a new team!"
+    elif flag == "updated":
+        context["free_agent_success"] = "Free agent updated."
+    elif flag == "deleted":
+        context["free_agent_success"] = "Free agent removed."
+    elif flag == "error":
+        context["free_agent_error"] = "Unable to update the free agent. Provide a name."
+
     context.setdefault("free_agent_error", None)
     context.setdefault("free_agent_success", None)
     return templates.TemplateResponse(request, "teams.html", context)
@@ -176,6 +249,61 @@ async def create_team(
     return RedirectResponse(redirect_url, status_code=303)
 
 
+@router.post("/teams/{team_id}/update", response_class=HTMLResponse, name="update_team")
+async def update_team(
+    request: Request,
+    team_id: int,
+    session: Session = Depends(get_session),
+    name: str = Form(...),
+):
+    team = session.get(Team, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    cleaned = name.strip()
+    if len(cleaned) < 2:
+        redirect_url = str(request.url_for("team_directory")) + "?team=invalid"
+        return RedirectResponse(redirect_url, status_code=303)
+
+    duplicate = session.exec(
+        select(Team).where((Team.id != team.id) & (Team.event_id == team.event_id) & (Team.name == cleaned))
+    ).first()
+    if duplicate:
+        redirect_url = str(request.url_for("team_directory")) + "?team=exists"
+        return RedirectResponse(redirect_url, status_code=303)
+
+    team.name = cleaned
+    session.add(team)
+    session.commit()
+
+    redirect_url = str(request.url_for("team_directory")) + "?team=updated"
+    return RedirectResponse(redirect_url, status_code=303)
+
+
+@router.post("/teams/{team_id}/delete", response_class=HTMLResponse, name="delete_team")
+async def delete_team(request: Request, team_id: int, session: Session = Depends(get_session)):
+    team = session.get(Team, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    event_id = team.event_id
+    team_identifier = team.id
+    session.delete(team)
+    session.commit()
+
+    agents = session.exec(select(FreeAgent).where(FreeAgent.team_id == team_identifier)).all()
+    for agent in agents:
+        agent.team_id = None
+        agent.status = "pending"
+        session.add(agent)
+    session.commit()
+
+    _clear_event_matches(session, event_id)
+
+    redirect_url = str(request.url_for("team_directory")) + "?team=deleted"
+    return RedirectResponse(redirect_url, status_code=303)
+
+
 @router.post("/free-agent", response_class=HTMLResponse, name="register_free_agent")
 async def register_free_agent(
     request: Request,
@@ -212,6 +340,67 @@ async def register_free_agent(
     return RedirectResponse(redirect_url, status_code=303)
 
 
+@router.post("/free-agent/{agent_id}/update", response_class=HTMLResponse, name="update_free_agent")
+async def update_free_agent(
+    request: Request,
+    agent_id: int,
+    session: Session = Depends(get_session),
+    name: str = Form(...),
+    status: str = Form(...),
+    note: str | None = Form(default=None),
+    team_id: str | None = Form(default=None),
+):
+    agent = session.get(FreeAgent, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Free agent not found")
+
+    trimmed_name = name.strip()
+    if not trimmed_name:
+        redirect_url = str(request.url_for("team_directory")) + "?free_agent=error"
+        return RedirectResponse(redirect_url, status_code=303)
+
+    status_value = status.lower()
+    if status_value not in ALLOWED_FREE_AGENT_STATUSES:
+        status_value = "pending"
+
+    agent.name = trimmed_name
+    agent.note = note.strip() if note else None
+    agent.status = status_value
+
+    if status_value == "pending":
+        agent.team_id = None
+    else:
+        assigned_team_id: int | None = None
+        if team_id:
+            try:
+                candidate_id = int(team_id)
+            except ValueError:
+                candidate_id = None
+            if candidate_id is not None:
+                team = session.get(Team, candidate_id)
+                if team and team.event_id == agent.event_id:
+                    assigned_team_id = team.id
+        agent.team_id = assigned_team_id
+
+    session.add(agent)
+    session.commit()
+
+    redirect_url = str(request.url_for("team_directory")) + "?free_agent=updated"
+    return RedirectResponse(redirect_url, status_code=303)
+
+
+@router.post("/free-agent/{agent_id}/delete", response_class=HTMLResponse, name="delete_free_agent")
+async def delete_free_agent(request: Request, agent_id: int, session: Session = Depends(get_session)):
+    agent = session.get(FreeAgent, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Free agent not found")
+    session.delete(agent)
+    session.commit()
+
+    redirect_url = str(request.url_for("team_directory")) + "?free_agent=deleted"
+    return RedirectResponse(redirect_url, status_code=303)
+
+
 @router.post("/matches/{match_id}/score", response_class=HTMLResponse, name="record_score")
 async def record_score(
     request: Request,
@@ -242,7 +431,7 @@ def _home_context(
     session: Session,
     *,
     rsvp_error: str | None = None,
-    rsvp_success: bool = False,
+    rsvp_status: str | None = None,
 ) -> dict[str, object]:
     event = get_active_event(session)
     rsvps = _fetch_rsvps(session, event.id)
@@ -252,7 +441,7 @@ def _home_context(
         "rsvps": rsvps,
         "guest_total": guest_total,
         "rsvp_error": rsvp_error,
-        "rsvp_success": rsvp_success,
+        "rsvp_status": rsvp_status,
     }
 
 

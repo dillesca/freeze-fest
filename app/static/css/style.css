@@ -102,6 +102,103 @@ body {
   background: rgba(255, 255, 255, 0.3);
 }
 
+.rsvp-card,
+.free-agent-card,
+.team-list__header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.inline-editor {
+  margin-top: 0.75rem;
+  border: 1px dashed rgba(0, 0, 0, 0.15);
+  border-radius: 12px;
+  padding: 0.75rem 0.85rem;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.inline-editor summary {
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+}
+
+.inline-editor summary::-webkit-details-marker {
+  display: none;
+}
+
+.inline-editor summary::after {
+  content: "▾";
+  margin-left: 0.5rem;
+  font-size: 0.8rem;
+  opacity: 0.65;
+}
+
+.inline-editor[open] {
+  background: rgba(13, 110, 253, 0.05);
+}
+
+.inline-form {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.inline-form label {
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.inline-form input,
+.inline-form textarea,
+.inline-form select {
+  font: inherit;
+  padding: 0.6rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.inline-form button {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 999px;
+  padding: 0.6rem 1.4rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inline-form--danger button {
+  background: #c0392b;
+}
+
+.inline-form--danger button:hover,
+.inline-form--danger button:focus-visible {
+  filter: brightness(0.9);
+}
+
+.rsvp-card + .inline-editor,
+.free-agent-card + .inline-editor,
+.team-list__header + .inline-editor {
+  margin-top: 0.75rem;
+}
+
+.team-list__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
 .content {
   flex: 1;
   display: grid;
