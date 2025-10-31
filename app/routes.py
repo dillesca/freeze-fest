@@ -244,6 +244,7 @@ async def create_team(
     session.refresh(team)
 
     _clear_event_matches(session, event.id)
+    session.commit()
 
     redirect_url = str(request.url_for("team_directory")) + "?created=1"
     return RedirectResponse(redirect_url, status_code=303)
@@ -287,18 +288,15 @@ async def delete_team(request: Request, team_id: int, session: Session = Depends
         raise HTTPException(status_code=404, detail="Team not found")
 
     event_id = team.event_id
-    team_identifier = team.id
-    session.delete(team)
-    session.commit()
-
-    agents = session.exec(select(FreeAgent).where(FreeAgent.team_id == team_identifier)).all()
+    agents = session.exec(select(FreeAgent).where(FreeAgent.team_id == team.id)).all()
     for agent in agents:
         agent.team_id = None
         agent.status = "pending"
         session.add(agent)
-    session.commit()
 
     _clear_event_matches(session, event_id)
+    session.delete(team)
+    session.commit()
 
     redirect_url = str(request.url_for("team_directory")) + "?team=deleted"
     return RedirectResponse(redirect_url, status_code=303)
@@ -705,7 +703,6 @@ def _clear_event_matches(session: Session, event_id: int) -> None:
     matches = session.exec(select(Match).where(Match.event_id == event_id)).all()
     for match in matches:
         session.delete(match)
-    session.commit()
 
 
 def _team_lookup(session: Session, event_id: int) -> dict[int, str]:

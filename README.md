@@ -15,10 +15,10 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 export DATABASE_URL=postgresql://freeze_fest:freeze_fest@localhost:5432/freeze_fest
-uvicorn app:app --reload --port 5000
+uvicorn app:app --reload --port 8080
 ```
 
-Open http://127.0.0.1:5000 to interact with the site. Prefer containers for everything? Run `docker compose up --build` to launch the API + Postgres services together.
+Open http://127.0.0.1:8080 to interact with the site. Prefer containers for everything? Run `docker compose up --build` to launch the API + Postgres services together. The containerized API is exposed on http://localhost:8080.
 
 ## Running tests
 
@@ -69,13 +69,13 @@ The tests point `DATABASE_URL` at a temporary SQLite file to stay fast and isola
 
 1. Branch from `main` for every feature (`git checkout main && git pull && git checkout -b feature/foo`).
 2. Open a pull request targeting `main` and keep pushing to the feature branch until CI is green and the review is approved (`ready-for-prod` label still gates the PR).
-3. After approval, run the **Promote To Develop** workflow from the Actions tab and set `source_branch` to your feature branch. The workflow merges that branch into `develop`, which in turn triggers the normal CI run and the automatic dev deployment.
-4. Once the dev environment is validated, trigger the **Promote To Main** workflow (source defaults to `develop`). That merge keeps `main` up to date, after which you can redeploy Cloud Run from the new revision.
+3. Run the **Promote To Develop** workflow (Actions tab) after approval to keep `develop` current. This branch is our staging ground but does not deploy anywhere automatically.
+4. Merge `develop` into `main` via the **Promote To Main** workflow once the change is validated. The `main` branch is the source of truth for production, and each merge should be followed by a Cloud Run deploy (`gcloud run deploy` using the commands below).
 5. Delete the feature branch after promotion to keep history tidy.
 
 ## Deployment (Cloud Run)
 
-Build and push the container image to Artifact Registry, then deploy:
+`main` represents the version currently deployed to Google Cloud. After merging into `main`, build and push the container image to Artifact Registry, then deploy:
 
 ```bash
 gcloud builds submit --tag us-west1-docker.pkg.dev/<PROJECT_ID>/freeze-fest/freeze-fest:latest

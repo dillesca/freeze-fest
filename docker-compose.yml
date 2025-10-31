@@ -15,15 +15,15 @@ services:
 
   api:
     build: .
-    command: uvicorn app:app --host 0.0.0.0 --port 5000
     env_file:
       - .env
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://freeze_fest:freeze_fest@postgres:5432/freeze_fest}
+      PORT: ${PORT:-8080}
     depends_on:
       - postgres
     ports:
-      - "5000:5000"
+      - "8080:8080"
 
 volumes:
   postgres-data:

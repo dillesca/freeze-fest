@@ -102,6 +102,17 @@ body {
   background: rgba(255, 255, 255, 0.3);
 }
 
+.content--single {
+  display: flex;
+  justify-content: center;
+  padding: clamp(1rem, 5vw, 4rem);
+}
+
+.content--single .panel {
+  max-width: 760px;
+  width: 100%;
+}
+
 .rsvp-card,
 .free-agent-card,
 .team-list__header {
