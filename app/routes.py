@@ -879,7 +879,7 @@ def _photo_context(
     photo_success: bool = False,
 ) -> dict[str, object]:
     event = get_active_event(session)
-    photos = _decorate_photo_urls(_fetch_photos(session, event.id))
+    photos = [_photo_payload(photo) for photo in _fetch_photos(session, event.id)]
     return {
         "event": event,
         "photos": photos,
@@ -902,7 +902,7 @@ def _events_context(session: Session) -> list[dict[str, object]]:
         cards.append(
             {
                 "event": event,
-                "photos": _decorate_photo_urls(list(photos)),
+                "photos": [_photo_payload(photo) for photo in photos],
                 "team_count": team_count,
             }
         )
@@ -1510,8 +1510,8 @@ def _fetch_photos(session: Session, event_id: int):
     return session.exec(select(Photo).where(Photo.event_id == event_id).order_by(Photo.created_at.desc())).all()
 
 
-def _photo_image_url(photo: Photo) -> str:
-    identifier = photo.filename or ""
+def _photo_image_url(filename: str) -> str:
+    identifier = filename or ""
     if not identifier:
         return ""
     if identifier.startswith(("http://", "https://")):
@@ -1528,10 +1528,14 @@ def _photo_image_url(photo: Photo) -> str:
     return f"/static/uploads/{identifier}"
 
 
-def _decorate_photo_urls(photos: list[Photo]) -> list[Photo]:
-    for photo in photos:
-        photo.image_url = _photo_image_url(photo)
-    return photos
+def _photo_payload(photo: Photo) -> dict[str, object]:
+    return {
+        "id": photo.id,
+        "image_url": _photo_image_url(photo.filename),
+        "created_at": photo.created_at,
+        "original_name": photo.original_name,
+        "event_id": photo.event_id,
+    }
 
 
 def _team_context(

@@ -94,14 +94,17 @@ def _validate_schedule(team_count: int) -> None:
             order_indexes = [match.order_index for match in matches]
             assert len(order_indexes) == len(set(order_indexes))
 
-            # Each team should play every game at least once (solo runs count for Bucket Golf pool).
+            # Each team should play allotted games under the odd-team bye rules.
             appearances: dict[str, defaultdict[int, int]] = {game: defaultdict(int) for game in GAMES}
+            match_counts: defaultdict[str, int] = defaultdict(int)
             for match in matches:
+                match_counts[match.game] += 1
                 appearances[match.game][match.team1_id] += 1
                 if match.team2_id != match.team1_id:
                     appearances[match.game][match.team2_id] += 1
 
             bye_counts: defaultdict[str, int] = defaultdict(int)
+            bye_games: defaultdict[int, set[str]] = defaultdict(set)
             for team in teams:
                 for game in GAMES:
                     count = appearances[game].get(team.id, 0)
@@ -111,6 +114,7 @@ def _validate_schedule(team_count: int) -> None:
                     if len(teams) % 2 == 1 and game != "Bucket Golf":
                         if count == 0:
                             bye_counts[game] += 1
+                            bye_games[team.id].add(game)
                         continue
                     assert count >= 1, f"{team.name} missing {game} match."
 
@@ -119,6 +123,25 @@ def _validate_schedule(team_count: int) -> None:
                     if game == "Bucket Golf":
                         continue
                     assert bye_counts[game] <= 1, f"Too many byes scheduled for {game}."
+                assert bye_counts["Cornhole"] == 1, "Exactly one cornhole bye expected."
+                assert bye_counts["KanJam"] >= 1, "At least one KanJam bye expected."
+                kanjam_pairs = [match for match in matches if match.game == "KanJam"]
+                assert kanjam_pairs, "Expected KanJam matches."
+                first_bye_team = None
+                second_bye_team = None
+                for team_id, games in bye_games.items():
+                    if "Cornhole" in games:
+                        if first_bye_team is None:
+                            first_bye_team = team_id
+                        else:
+                            second_bye_team = team_id
+                assert first_bye_team is not None, "Cornhole bye team missing."
+                finalists = [
+                    match
+                    for match in kanjam_pairs
+                    if {match.team1_id, match.team2_id} == {first_bye_team, second_bye_team}
+                ]
+                assert finalists, "Bye teams should meet in a KanJam showdown."
 
             # Verify unique opponents per game (excluding solo runs).
             seen_pairs: set[tuple[str, int, int]] = set()
