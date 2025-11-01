@@ -24,15 +24,17 @@ EVENT_DEFINITIONS = [
         "event_date": date(2025, 11, 15),
         "games": "Cornhole, Bucket Golf, KanJam",
         "winners": None,
+        "winner_photo": None,
     },
     {
         "name": "Freeze Fest 2024",
         "slug": "2024",
         "description": "Tri-game series celebrating the end of mosquito season",
         "location": "South Valley, Albuquerque, NM",
-        "event_date": date(2024, 11, 11),
+        "event_date": date(2024, 11, 16),
         "games": "Cornhole, KanJam, Rollors",
         "winners": "John & Stefan",
+        "winner_photo": None,
     },
 ]
 
@@ -60,11 +62,12 @@ SAMPLE_IMAGE = STATIC_DIR / "img/freezefest.png"
 SAMPLE_UPLOAD_NAME = "sample-freezefest.png"
 
 ACTIVE_EVENT_DEFINITION = {
-    "name": "Freeze Fest "+ACTIVE_EVENT_SLUG,
+    "name": "Freeze Fest " + ACTIVE_EVENT_SLUG,
     "slug": ACTIVE_EVENT_SLUG,
     "description": "Annual cornhole, bucket golf, and KanJam showdown",
     "location": "South Valley, Albuquerque, NM",
     "event_date": date(2025, 11, 15),
+    "winner_photo": None,
 }
 
 
@@ -77,6 +80,7 @@ class Event(SQLModel, table=True):
     event_date: date = Field(nullable=False)
     games: str = Field(default="Cornhole, Bucket Golf, KanJam", nullable=False)
     winners: str | None = Field(default=None)
+    winner_photo: str | None = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
 
 
@@ -138,6 +142,7 @@ def init_db() -> None:
     SQLModel.metadata.create_all(engine)
     _ensure_team_member_columns()
     _ensure_playoff_columns()
+    _ensure_event_winner_photo_column()
     _ensure_upload_dir()
     events = _ensure_events()
     _seed_sample_photos(events)
@@ -248,3 +253,21 @@ def _ensure_playoff_columns() -> None:
 
         for stmt in statements:
             conn.exec_driver_sql(stmt)
+
+
+def _ensure_event_winner_photo_column() -> None:
+    with engine.begin() as conn:
+        dialect = conn.dialect.name
+        if dialect == "sqlite":
+            rows = conn.exec_driver_sql("PRAGMA table_info('event')")
+            existing_columns = {row[1] for row in rows}
+        else:
+            rows = conn.exec_driver_sql(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name='event' AND table_schema = current_schema()"
+            )
+            existing_columns = {row[0] for row in rows}
+
+        if "winner_photo" not in existing_columns:
+            column_type = "TEXT" if dialect == "sqlite" else "VARCHAR(255)"
+            conn.exec_driver_sql(f"ALTER TABLE event ADD COLUMN winner_photo {column_type}")

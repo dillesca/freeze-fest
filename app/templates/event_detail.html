@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Past Freeze Fest Events</title>
+    <title>{{ event.name }} • Freeze Fest Recap</title>
     <link rel="icon" type="image/png" href="{{ request.url_for('static', path='img/freezefest.png') }}">
     <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
   </head>
@@ -27,8 +27,7 @@
         <div class="site-logo" role="presentation">
           <img src="{{ request.url_for('static', path='img/freezefest.png') }}" alt="Freeze Fest mascot" loading="lazy" />
         </div>
-        <h1>Freeze Fest Archives</h1>
-        <p class="page-subtitle">Relive highlights from past tournaments and see who took home the crown.</p>
+        <h1>{{ event.name }}</h1>
         <nav class="page-nav" aria-label="Primary">
           <a href="{{ request.url_for('index') }}">RSVP</a>
           <a href="{{ request.url_for('team_directory') }}">Register a Team</a>
@@ -42,49 +41,49 @@
     </header>
 
     <main class="content">
-      {% for card in events %}
-      {% set event = card.event %}
-      <section class="panel event-card">
-        <header class="panel-header">
+      <article class="event-detail">
+        <header>
+          <p class="event-detail__meta">{{ event.event_date.strftime('%B %d, %Y') }}{% if event.location %} · {{ event.location }}{% endif %}</p>
           <h2>{{ event.name }}</h2>
-          {% if event.location %}
-          <p class="event-card__meta">{{ event.location }}</p>
-          {% endif %}
-          <p>{{ event.description }}</p>
-        </header>
-        <ul class="event-meta">
-          <li>
-            <span>Games</span>
-            <strong>{{ event.games }}</strong>
-          </li>
-          {% if event.winners %}
-          <li>
-            <span>Winners</span>
-            <strong>{{ event.winners }}</strong>
-          </li>
-          {% endif %}
-        </ul>
-        {% if card.photos %}
-        <div class="event-photos event-photos--preview">
-          {% for photo in card.photos %}
-          <figure>
-            <img src="{{ photo.image_url }}" alt="Photo from {{ event.name }}" loading="lazy" />
-          </figure>
-          {% endfor %}
-        </div>
-        {% else %}
-        <p class="empty-state">No photos archived for this year yet.</p>
-        {% endif %}
-        <div class="event-card__actions">
-          <a class="event-card__link" href="{{ request.url_for('event_detail', slug=card.detail_slug) }}">
-            View Event Recap
-            {% if card.has_more %}
-            <span aria-hidden="true">&rsaquo;</span>
+          <p class="event-detail__description">{{ event.description }}</p>
+          <dl class="event-detail__stats">
+            <div>
+              <dt>Games</dt>
+              <dd>{{ event.games }}</dd>
+            </div>
+            {% if event.winners %}
+            <div>
+              <dt>Winners</dt>
+              <dd>{{ event.winners }}</dd>
+            </div>
             {% endif %}
-          </a>
-        </div>
-      </section>
-      {% endfor %}
+          </dl>
+        </header>
+
+        {% if winner_photo_url %}
+        <figure class="event-detail__winner">
+          <img src="{{ winner_photo_url }}" alt="Winners of {{ event.name }}" loading="lazy" />
+          {% if event.winners %}
+          <figcaption>{{ event.winners }}</figcaption>
+          {% endif %}
+        </figure>
+        {% endif %}
+
+        {% if photos %}
+        <section class="event-gallery">
+          <h2>Photo Gallery</h2>
+          <div class="event-gallery__list">
+            {% for photo in photos %}
+            <img class="event-gallery__image" src="{{ photo.image_url }}" alt="Photo from {{ event.name }}" loading="lazy" />
+            {% endfor %}
+          </div>
+        </section>
+        {% else %}
+        <p class="empty-state">No photos archived for this event yet.</p>
+        {% endif %}
+      </article>
     </main>
+
+    <script src="{{ request.url_for('static', path='js/main.js') }}" defer></script>
   </body>
 </html>

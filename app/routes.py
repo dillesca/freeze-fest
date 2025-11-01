@@ -57,6 +57,7 @@ MAX_OPEN_MATCHES_PER_GAME = {
 
 logger = logging.getLogger(__name__)
 USE_GCS_PHOTOS = gcs_photos_enabled()
+EVENT_GALLERY_PREVIEW_LIMIT = 8
 
 
 def _ensure_upload_dir() -> None:
@@ -392,6 +393,28 @@ async def events_page(request: Request, session: Session = Depends(get_session))
     cards = _events_context(session)
     context = {"events": cards}
     return _render(request, "events.html", context)
+
+
+@router.get("/events/{slug}", response_class=HTMLResponse, name="event_detail")
+async def event_detail(slug: str, request: Request, session: Session = Depends(get_session)):
+    event = session.exec(select(Event).where(Event.slug == slug)).first()
+    if not event or event.slug == ACTIVE_EVENT_SLUG:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    photos = session.exec(
+        select(Photo)
+        .where(Photo.event_id == event.id)
+        .order_by(Photo.created_at.desc())
+    ).all()
+
+    winner_photo_url = _photo_image_url(event.winner_photo) if event.winner_photo else None
+
+    context = {
+        "event": event,
+        "photos": [_photo_payload(photo) for photo in photos],
+        "winner_photo_url": winner_photo_url,
+    }
+    return _render(request, "event_detail.html", context)
 
 
 @router.get("/about", response_class=HTMLResponse, name="about_page")
@@ -908,16 +931,21 @@ def _events_context(session: Session) -> list[dict[str, object]]:
     cards: list[dict[str, object]] = []
     for event in events:
         team_count = len(session.exec(select(Team).where(Team.event_id == event.id)).all())
-        photos = session.exec(
+        photo_query = (
             select(Photo)
             .where(Photo.event_id == event.id)
             .order_by(Photo.created_at.desc())
-        ).all()
+        )
+        preview_results = session.exec(photo_query.limit(EVENT_GALLERY_PREVIEW_LIMIT + 1)).all()
+        has_more = len(preview_results) > EVENT_GALLERY_PREVIEW_LIMIT
+        preview_photos = [_photo_payload(photo) for photo in preview_results[:EVENT_GALLERY_PREVIEW_LIMIT]]
         cards.append(
             {
                 "event": event,
-                "photos": [_photo_payload(photo) for photo in photos],
+                "photos": preview_photos,
                 "team_count": team_count,
+                "has_more": has_more,
+                "detail_slug": event.slug,
             }
         )
     return cards
