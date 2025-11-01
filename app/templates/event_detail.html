@@ -72,9 +72,11 @@
         {% if photos %}
         <section class="event-gallery">
           <h2>Photo Gallery</h2>
-          <div class="event-gallery__list">
+          <div class="event-gallery__masonry">
             {% for photo in photos %}
-            <img class="event-gallery__image" src="{{ photo.image_url }}" alt="Photo from {{ event.name }}" loading="lazy" />
+            <figure class="event-gallery__item">
+              <img src="{{ photo.image_url }}" alt="Photo from {{ event.name }}" loading="lazy" />
+            </figure>
             {% endfor %}
           </div>
         </section>
