@@ -68,6 +68,18 @@
         <figure class="event-card__winner">
           <img src="{{ card.winner_image_url }}" alt="Winners of {{ event.name }}" loading="lazy" />
         </figure>
+        {% elif card.photos %}
+        <div class="photo-carousel photo-carousel--compact" role="region" aria-label="Photos from {{ event.name }}">
+          <button class="carousel-btn carousel-btn--prev" type="button" aria-label="Previous photo">&#10094;</button>
+          <div class="photo-carousel__viewport">
+            {% for photo in card.photos %}
+            <figure class="photo-slide{% if loop.first %} is-active{% endif %}">
+              <img src="{{ photo.image_url }}" alt="Photo from {{ event.name }}" loading="lazy" />
+            </figure>
+            {% endfor %}
+          </div>
+          <button class="carousel-btn carousel-btn--next" type="button" aria-label="Next photo">&#10095;</button>
+        </div>
         {% else %}
         <p class="empty-state">No photos archived for this year yet.</p>
         {% endif %}

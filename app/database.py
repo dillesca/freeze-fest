@@ -4,17 +4,30 @@ from __future__ import annotations
 
 import os
 import shutil
+import logging
 from datetime import date, datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Iterator
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select
+
+try:  # Optional conversion support
+    from pillow_heif import read_heif
+    from PIL import Image
+except ImportError:  # pragma: no cover
+    read_heif = None
+    Image = None
 
 BASE_DIR = Path(__file__).resolve().parent
 
 
 DEFAULT_SQLITE_PATH = "sqlite:///./freeze_fest.db"
 ACTIVE_EVENT_SLUG = "2025"
+LOCAL_PHOTO_IMPORT_DIR = os.getenv("LOCAL_PHOTO_IMPORT_DIR_CONTAINER") or os.getenv("LOCAL_PHOTO_IMPORT_DIR")
+LOCAL_PHOTO_IMPORT_EVENT_SLUG = os.getenv("LOCAL_PHOTO_IMPORT_EVENT_SLUG")
+
+logger = logging.getLogger(__name__)
 EVENT_DEFINITIONS = [
     {
         "name": "Freeze Fest 2025",
@@ -215,6 +228,84 @@ def _seed_sample_photos(events: list[Event]) -> None:
                 )
             )
             session.commit()
+
+        _import_local_photos(session, events)
+
+
+def _import_local_photos(session: Session, events: list[Event]) -> None:
+    if not LOCAL_PHOTO_IMPORT_DIR or not LOCAL_PHOTO_IMPORT_EVENT_SLUG:
+        return
+
+    source_dir = Path(LOCAL_PHOTO_IMPORT_DIR)
+    if not source_dir.exists():
+        logger.warning("Local photo import directory %s not found", source_dir)
+        return
+
+    target_event = next((event for event in events if event.slug == LOCAL_PHOTO_IMPORT_EVENT_SLUG), None)
+    if not target_event:
+        logger.warning("No event matches LOCAL_PHOTO_IMPORT_EVENT_SLUG=%s", LOCAL_PHOTO_IMPORT_EVENT_SLUG)
+        return
+
+    allowed_suffixes = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".heif"}
+    existing = {
+        photo.filename
+        for photo in session.exec(select(Photo).where(Photo.event_id == target_event.id))
+    }
+
+    for file_path in sorted(source_dir.iterdir()):
+        if not file_path.is_file():
+            continue
+
+        suffix = file_path.suffix.lower()
+        if suffix not in allowed_suffixes:
+            continue
+
+        dest_suffix = suffix
+        data_bytes: bytes | None = None
+        try:
+            if suffix in {".heic", ".heif"}:
+                if not read_heif or not Image:
+                    logger.warning("Skipping %s: HEIC support unavailable", file_path.name)
+                    continue
+                heif_file = read_heif(file_path)
+                img = Image.frombytes(heif_file.mode, heif_file.size, heif_file.data, "raw")
+                buffer = BytesIO()
+                img.save(buffer, format="JPEG")
+                data_bytes = buffer.getvalue()
+                dest_suffix = ".jpg"
+            else:
+                data_bytes = file_path.read_bytes()
+        except Exception as exc:  # pragma: no cover - best effort import
+            logger.warning("Skipping %s: %s", file_path.name, exc)
+            continue
+
+        if data_bytes is None:
+            continue
+
+        dest_stem = file_path.stem
+        dest_name = f"{dest_stem}{dest_suffix}"
+        dest_path = UPLOAD_DIR / dest_name
+        counter = 1
+        while dest_path.exists():
+            dest_name = f"{dest_stem}_{counter}{dest_suffix}"
+            dest_path = UPLOAD_DIR / dest_name
+            counter += 1
+
+        dest_path.write_bytes(data_bytes)
+
+        if dest_name in existing:
+            continue
+
+        session.add(
+            Photo(
+                filename=dest_name,
+                original_name=file_path.name,
+                event_id=target_event.id,
+            )
+        )
+        existing.add(dest_name)
+
+    session.commit()
 
 
 def _ensure_team_member_columns() -> None:

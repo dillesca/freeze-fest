@@ -59,6 +59,17 @@ GCS_PHOTO_BUCKET=freeze-fest-photos
 
 With `GCS_PHOTO_BUCKET` set, new uploads stream directly to the bucket (`photos/<event-slug>/<uuid>.jpg`). Existing local files are still served from `/static/uploads/`.
 
+### Local photo import (dev convenience)
+
+When running locally you can auto-import a folder of images into the SQLite/Postgres seed by setting these env vars before starting the API:
+
+```
+LOCAL_PHOTO_IMPORT_DIR=/Users/you/Downloads/FreezeFest2024
+LOCAL_PHOTO_IMPORT_EVENT_SLUG=2024
+```
+
+When running under Docker, the compose file mounts `${LOCAL_PHOTO_IMPORT_DIR}` into the container and the app reads from `/app/local-photo-import`, so after `docker compose up`, the seed step copies (and HEIC→JPEG converts) everything into the database for that event. Remove the variables when you no longer need the import.
+
 ## Playoffs format
 
 1. Top four leaderboard teams enter a bucket-golf semifinal (lowest two scores advance, ties replay a hole).  

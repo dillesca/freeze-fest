@@ -20,6 +20,10 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://freeze_fest:freeze_fest@postgres:5432/freeze_fest}
       PORT: ${PORT:-8080}
+      LOCAL_PHOTO_IMPORT_DIR_CONTAINER: "/app/local-photo-import"
+      LOCAL_PHOTO_IMPORT_EVENT_SLUG: "${LOCAL_PHOTO_IMPORT_EVENT_SLUG:-2024}"
+    volumes:
+      - ${LOCAL_PHOTO_IMPORT_DIR:-/tmp/empty}:/app/local-photo-import:ro
     depends_on:
       - postgres
     ports:

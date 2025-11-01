@@ -9,6 +9,7 @@ import os
 import secrets
 import shutil
 import time
+from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 from urllib.parse import quote, urljoin
@@ -18,7 +19,14 @@ from collections import defaultdict
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
+
+try:  # Optional – used for HEIC conversion
+    from pillow_heif import read_heif
+    from PIL import Image
+except ImportError:  # pragma: no cover - graceful fallback when libs missing
+    read_heif = None
+    Image = None
 
 from .bracket import GAMES, generate_schedule
 
@@ -414,7 +422,17 @@ async def event_detail(slug: str, request: Request, session: Session = Depends(g
         .order_by(Photo.id.desc())
     ).all()
 
-    winner_photo_url = _photo_image_url(event.winner_photo) if event.winner_photo else None
+    winner_photo_url = None
+    winner_record = session.exec(
+        select(Photo)
+        .where((Photo.event_id == event.id) & (func.lower(Photo.original_name).like('winner%')))
+        .order_by(Photo.id.desc())
+        .limit(1)
+    ).first()
+    if winner_record:
+        winner_photo_url = _photo_image_url(winner_record.filename)
+    elif event.winner_photo:
+        winner_photo_url = _photo_image_url(event.winner_photo)
 
     context = {
         "event": event,
@@ -528,8 +546,8 @@ async def upload_photo(
         context = _photo_context(session, photo_error="Select at least one image to upload.")
         return _render(request, "photos.html", context, status_code=400)
 
-    allowed_suffixes = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
-    prepared: list[tuple[UploadFile, str, str, str]] = []  # file, original, suffix, content_type
+    allowed_suffixes = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".heif"}
+    prepared: list[dict[str, object]] = []
     errors: list[str] = []
 
     for image in images:
@@ -541,9 +559,43 @@ async def upload_photo(
             errors.append(f"{original_name}: only image uploads are allowed.")
             continue
         if suffix not in allowed_suffixes:
-            errors.append(f"{original_name}: use PNG, JPG, GIF, or WebP images.")
+            errors.append(f"{original_name}: use PNG, JPG, GIF, HEIC, or WebP images.")
             continue
-        prepared.append((image, original_name, suffix, content_type))
+
+        try:
+            file_bytes = await image.read()
+        except Exception:
+            errors.append(f"{original_name}: failed to read upload.")
+            continue
+
+        if suffix in {".heic", ".heif"}:
+            if not read_heif or not Image:
+                errors.append(f"{original_name}: HEIC support is not available on the server.")
+                continue
+            try:
+                heif_file = read_heif(file_bytes)
+                img = Image.frombytes(heif_file.mode, heif_file.size, heif_file.data, "raw")
+                buffer = BytesIO()
+                img.save(buffer, format="JPEG")
+                file_bytes = buffer.getvalue()
+                suffix = ".jpg"
+                content_type = "image/jpeg"
+                original_name = f"{Path(original_name).stem}.jpg"
+            except Exception:
+                errors.append(f"{original_name}: could not convert HEIC image.")
+                continue
+        else:
+            if suffix in {".jpg", ".jpeg"}:
+                content_type = "image/jpeg"
+
+        prepared.append(
+            {
+                "data": file_bytes,
+                "original_name": original_name,
+                "suffix": suffix,
+                "content_type": content_type or "image/jpeg",
+            }
+        )
 
     if not prepared:
         context = _photo_context(session, photo_error=" ".join(errors))
@@ -552,21 +604,23 @@ async def upload_photo(
     successes = 0
     upload_failures: list[str] = []
 
-    for image, original_name, suffix, content_type in prepared:
+    for item in prepared:
+        data = item["data"]
+        original_name = item["original_name"]
+        suffix = item["suffix"]
+        content_type = item["content_type"]
         object_basename = f"{uuid4().hex}{suffix}"
         storage_identifier = object_basename
         try:
             if USE_GCS_PHOTOS:
                 object_name = f"{event.slug}/photos/{object_basename}"
-                image.file.seek(0)
-                upload_photo_stream(image.file, object_name=object_name, content_type=content_type)
+                upload_photo_stream(BytesIO(data), object_name=object_name, content_type=content_type)
                 storage_identifier = make_gcs_identifier(object_name)
             else:
                 _ensure_upload_dir()
                 destination = UPLOAD_DIR / object_basename
-                image.file.seek(0)
                 with destination.open("wb") as buffer:
-                    shutil.copyfileobj(image.file, buffer)
+                    buffer.write(data)
 
             photo = Photo(filename=storage_identifier, original_name=original_name, event_id=event.id)
             session.add(photo)
@@ -976,10 +1030,16 @@ def _events_context(session: Session) -> list[dict[str, object]]:
             for photo in sorted(preview_results[:EVENT_GALLERY_PREVIEW_LIMIT], key=lambda p: p.id, reverse=True)
         ]
         winner_image_url = None
-        if event.winner_photo:
+        winner_record = session.exec(
+            select(Photo)
+            .where((Photo.event_id == event.id) & (func.lower(Photo.original_name).like('winner%')))
+            .order_by(Photo.id.desc())
+            .limit(1)
+        ).first()
+        if winner_record:
+            winner_image_url = _photo_image_url(winner_record.filename)
+        elif event.winner_photo:
             winner_image_url = _photo_image_url(event.winner_photo)
-        if not winner_image_url and preview_photos:
-            winner_image_url = preview_photos[0]["image_url"]
         cards.append(
             {
                 "event": event,
