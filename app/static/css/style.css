@@ -670,6 +670,56 @@ body {
   text-decoration: underline;
 }
 
+.event-card__winner {
+  margin: 1rem 0;
+  border-radius: 16px;
+  overflow: hidden;
+  max-height: 260px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.event-card__winner img {
+  max-width: 100%;
+  max-height: 260px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.photo-gallery {
+  column-count: 3;
+  column-gap: 1rem;
+}
+
+.photo-gallery__item {
+  margin: 0 0 1rem;
+  break-inside: avoid;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 18px 35px rgba(0, 0, 0, 0.08);
+}
+
+.photo-gallery__item img {
+  width: 100%;
+  display: block;
+}
+
+@media (max-width: 900px) {
+  .photo-gallery {
+    column-count: 2;
+  }
+}
+
+@media (max-width: 600px) {
+  .photo-gallery {
+    column-count: 1;
+  }
+}
+
 .events-grid {
   display: grid;
   gap: 1.5rem;

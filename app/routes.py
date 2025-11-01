@@ -384,7 +384,14 @@ async def start_playoffs(request: Request, session: Session = Depends(get_sessio
 @router.get("/photos", response_class=HTMLResponse, name="photos")
 async def photos_page(request: Request, session: Session = Depends(get_session)):
     success = request.query_params.get("photo") == "saved"
-    context = _photo_context(session, photo_success=success)
+    count_param = request.query_params.get("count")
+    try:
+        success_count = int(count_param) if count_param is not None else None
+    except ValueError:
+        success_count = None
+    if not success:
+        success_count = None
+    context = _photo_context(session, photo_success=success, photo_success_count=success_count)
     return _render(request, "photos.html", context)
 
 
@@ -513,56 +520,80 @@ async def delete_rsvp(request: Request, rsvp_id: int, session: Session = Depends
 async def upload_photo(
     request: Request,
     session: Session = Depends(get_session),
-    image: UploadFile = File(...),
+    images: list[UploadFile] = File(...),
 ):
     event = get_active_event(session)
-    error: str | None = None
-    original_name = image.filename or "upload.png"
-    content_type = (image.content_type or "").lower()
 
-    if not content_type.startswith("image/"):
-        error = "Only image uploads are allowed."
-
-    suffix = Path(original_name).suffix.lower() or ".png"
-    allowed_suffixes = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
-    if suffix not in allowed_suffixes:
-        error = "Use PNG, JPG, GIF, or WebP images."
-
-    if error:
-        context = _photo_context(session, photo_error=error)
+    if not images:
+        context = _photo_context(session, photo_error="Select at least one image to upload.")
         return _render(request, "photos.html", context, status_code=400)
 
-    object_basename = f"{uuid4().hex}{suffix}"
-    storage_identifier = object_basename
+    allowed_suffixes = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+    prepared: list[tuple[UploadFile, str, str, str]] = []  # file, original, suffix, content_type
+    errors: list[str] = []
 
-    try:
-        if USE_GCS_PHOTOS:
-            object_name = f"{event.slug}/photos/{object_basename}"
-            image.file.seek(0)
-            upload_photo_stream(image.file, object_name=object_name, content_type=content_type)
-            storage_identifier = make_gcs_identifier(object_name)
-        else:
-            _ensure_upload_dir()
-            destination = UPLOAD_DIR / object_basename
-            image.file.seek(0)
-            with destination.open("wb") as buffer:
-                shutil.copyfileobj(image.file, buffer)
-    except RuntimeError as exc:
-        logger.exception("Photo upload failed: %s", exc)
-        context = _photo_context(session, photo_error=str(exc))
-        return _render(request, "photos.html", context, status_code=500)
-    except Exception:
-        logger.exception("Unexpected error while uploading photo.")
+    for image in images:
+        original_name = image.filename or "upload.png"
+        content_type = (image.content_type or "").lower()
+        suffix = Path(original_name).suffix.lower() or ".png"
+
+        if not content_type.startswith("image/"):
+            errors.append(f"{original_name}: only image uploads are allowed.")
+            continue
+        if suffix not in allowed_suffixes:
+            errors.append(f"{original_name}: use PNG, JPG, GIF, or WebP images.")
+            continue
+        prepared.append((image, original_name, suffix, content_type))
+
+    if not prepared:
+        context = _photo_context(session, photo_error=" ".join(errors))
+        return _render(request, "photos.html", context, status_code=400)
+
+    successes = 0
+    upload_failures: list[str] = []
+
+    for image, original_name, suffix, content_type in prepared:
+        object_basename = f"{uuid4().hex}{suffix}"
+        storage_identifier = object_basename
+        try:
+            if USE_GCS_PHOTOS:
+                object_name = f"{event.slug}/photos/{object_basename}"
+                image.file.seek(0)
+                upload_photo_stream(image.file, object_name=object_name, content_type=content_type)
+                storage_identifier = make_gcs_identifier(object_name)
+            else:
+                _ensure_upload_dir()
+                destination = UPLOAD_DIR / object_basename
+                image.file.seek(0)
+                with destination.open("wb") as buffer:
+                    shutil.copyfileobj(image.file, buffer)
+
+            photo = Photo(filename=storage_identifier, original_name=original_name, event_id=event.id)
+            session.add(photo)
+            session.commit()
+            successes += 1
+        except RuntimeError as exc:
+            logger.exception("Photo upload failed: %s", exc)
+            upload_failures.append(f"{original_name}: {exc}")
+            session.rollback()
+        except Exception:
+            logger.exception("Unexpected error while uploading photo %s.", original_name)
+            upload_failures.append(
+                f"{original_name}: we hit a snag saving that photo. Please try again."
+            )
+            session.rollback()
+
+    if upload_failures:
+        error_msg = " ".join(upload_failures)
         context = _photo_context(
-            session, photo_error="We hit a snag saving that photo. Please try again."
+            session,
+            photo_error=error_msg,
+            photo_success=successes > 0,
+            photo_success_count=successes if successes else None,
         )
-        return _render(request, "photos.html", context, status_code=500)
+        return _render(request, "photos.html", context, status_code=207 if successes else 500)
 
-    photo = Photo(filename=storage_identifier, original_name=original_name, event_id=event.id)
-    session.add(photo)
-    session.commit()
-
-    redirect_url = str(request.url_for("photos")) + "?photo=saved"
+    redirect_url = str(request.url_for("photos")) + f"?photo=saved&count={successes}"
     return RedirectResponse(redirect_url, status_code=303)
 
 
@@ -911,6 +942,7 @@ def _photo_context(
     *,
     photo_error: str | None = None,
     photo_success: bool = False,
+    photo_success_count: int | None = None,
 ) -> dict[str, object]:
     event = get_active_event(session)
     photos = [_photo_payload(photo) for photo in _fetch_photos(session, event.id)]
@@ -919,6 +951,7 @@ def _photo_context(
         "photos": photos,
         "photo_error": photo_error,
         "photo_success": photo_success,
+        "photo_success_count": photo_success_count,
     }
 
 
@@ -942,6 +975,11 @@ def _events_context(session: Session) -> list[dict[str, object]]:
             _photo_payload(photo)
             for photo in sorted(preview_results[:EVENT_GALLERY_PREVIEW_LIMIT], key=lambda p: p.id, reverse=True)
         ]
+        winner_image_url = None
+        if event.winner_photo:
+            winner_image_url = _photo_image_url(event.winner_photo)
+        if not winner_image_url and preview_photos:
+            winner_image_url = preview_photos[0]["image_url"]
         cards.append(
             {
                 "event": event,
@@ -949,6 +987,7 @@ def _events_context(session: Session) -> list[dict[str, object]]:
                 "team_count": team_count,
                 "has_more": has_more,
                 "detail_slug": event.slug,
+                "winner_image_url": winner_image_url,
             }
         )
     return cards

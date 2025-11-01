@@ -63,9 +63,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!fileNameLabel) return;
     const files = fileInput.files;
     if (!files || files.length === 0) {
-      fileNameLabel.textContent = "No file chosen";
+      fileNameLabel.textContent = "No files chosen";
       return;
     }
-    fileNameLabel.textContent = files[0].name;
+    if (files.length === 1) {
+      fileNameLabel.textContent = files[0].name;
+    } else {
+      fileNameLabel.textContent = `${files.length} files selected`;
+    }
   });
 });
