@@ -47,7 +47,9 @@
       <section class="panel event-card">
         <header class="panel-header">
           <h2>{{ event.name }}</h2>
-          <p class="event-card__meta">{{ event.event_date.strftime('%B %d, %Y') }} · {{ event.location }}</p>
+          {% if event.location %}
+          <p class="event-card__meta">{{ event.location }}</p>
+          {% endif %}
           <p>{{ event.description }}</p>
         </header>
         <ul class="event-meta">

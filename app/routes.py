@@ -22,7 +22,18 @@ from sqlmodel import Session, select
 
 from .bracket import GAMES, generate_schedule
 
-from .database import Event, FreeAgent, Match, Photo, RSVP, Team, UPLOAD_DIR, get_active_event, get_session
+from .database import (
+    ACTIVE_EVENT_SLUG,
+    Event,
+    FreeAgent,
+    Match,
+    Photo,
+    RSVP,
+    Team,
+    UPLOAD_DIR,
+    get_active_event,
+    get_session,
+)
 from .storage import (
     extract_object_name,
     gcs_photos_enabled,
@@ -889,7 +900,11 @@ def _photo_context(
 
 
 def _events_context(session: Session) -> list[dict[str, object]]:
-    events = session.exec(select(Event).order_by(Event.event_date.desc())).all()
+    events = session.exec(
+        select(Event)
+        .where(Event.slug != ACTIVE_EVENT_SLUG)
+        .order_by(Event.event_date.desc())
+    ).all()
     cards: list[dict[str, object]] = []
     for event in events:
         team_count = len(session.exec(select(Team).where(Team.event_id == event.id)).all())
