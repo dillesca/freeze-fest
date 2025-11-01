@@ -45,7 +45,14 @@
         <header>
           <p class="event-detail__meta">{{ event.event_date.strftime('%B %d, %Y') }}{% if event.location %} · {{ event.location }}{% endif %}</p>
           <h2>{{ event.name }}</h2>
-          <p class="event-detail__description">{{ event.description }}</p>
+          {% if event.description %}
+          {% set paragraphs = event.description.split('\n\n') %}
+          <div class="event-detail__description">
+            {% for paragraph in paragraphs %}
+            <p>{{ paragraph }}</p>
+            {% endfor %}
+          </div>
+          {% endif %}
           <dl class="event-detail__stats">
             <div>
               <dt>Games</dt>
