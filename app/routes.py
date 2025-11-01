@@ -897,7 +897,6 @@ def _events_context(session: Session) -> list[dict[str, object]]:
             select(Photo)
             .where(Photo.event_id == event.id)
             .order_by(Photo.created_at.desc())
-            .limit(4)
         ).all()
         cards.append(
             {

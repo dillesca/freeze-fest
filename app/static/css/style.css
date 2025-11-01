@@ -1208,6 +1208,10 @@ body {
   max-height: clamp(220px, 40vw, 360px);
 }
 
+.photo-carousel--compact .photo-carousel__viewport {
+  max-height: 220px;
+}
+
 .photo-slide {
   display: none;
   margin: 0;
@@ -1223,6 +1227,10 @@ body {
   display: block;
   object-fit: cover;
   height: clamp(220px, 40vw, 360px);
+}
+
+.photo-carousel--compact .photo-slide img {
+  height: 220px;
 }
 
 .photo-slide figcaption {

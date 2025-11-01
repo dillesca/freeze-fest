@@ -44,5 +44,5 @@ def test_events_seeded():
     with Session(engine) as session:
         events = session.exec(select(Event)).all()
     slugs = {event.slug for event in events}
-    assert "freeze-fest-2025" in slugs
-    assert "freeze-fest-2024" in slugs
+    assert "2025" in slugs
+    assert "2024" in slugs

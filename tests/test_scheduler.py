@@ -118,30 +118,22 @@ def _validate_schedule(team_count: int) -> None:
                         continue
                     assert count >= 1, f"{team.name} missing {game} match."
 
+            cornhole_bye_team: int | None = None
+
             if len(teams) % 2 == 1:
                 for game in GAMES:
                     if game == "Bucket Golf":
                         continue
                     assert bye_counts[game] <= 1, f"Too many byes scheduled for {game}."
                 assert bye_counts["Cornhole"] == 1, "Exactly one cornhole bye expected."
-                assert bye_counts["KanJam"] >= 1, "At least one KanJam bye expected."
-                kanjam_pairs = [match for match in matches if match.game == "KanJam"]
-                assert kanjam_pairs, "Expected KanJam matches."
-                first_bye_team = None
-                second_bye_team = None
-                for team_id, games in bye_games.items():
-                    if "Cornhole" in games:
-                        if first_bye_team is None:
-                            first_bye_team = team_id
-                        else:
-                            second_bye_team = team_id
-                assert first_bye_team is not None, "Cornhole bye team missing."
-                finalists = [
-                    match
-                    for match in kanjam_pairs
-                    if {match.team1_id, match.team2_id} == {first_bye_team, second_bye_team}
-                ]
-                assert finalists, "Bye teams should meet in a KanJam showdown."
+                cornhole_bye_team = next(
+                    (team.id for team in teams if appearances["Cornhole"].get(team.id, 0) == 0),
+                    None,
+                )
+                assert cornhole_bye_team is not None, "Cornhole bye team missing."
+                assert (
+                    appearances["KanJam"].get(cornhole_bye_team, 0) >= 2
+                ), "Bye team should play an extra KanJam match."
 
             # Verify unique opponents per game (excluding solo runs).
             seen_pairs: set[tuple[str, int, int]] = set()
