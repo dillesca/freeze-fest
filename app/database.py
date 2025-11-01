@@ -14,7 +14,7 @@ BASE_DIR = Path(__file__).resolve().parent
 
 
 DEFAULT_SQLITE_PATH = "sqlite:///./freeze_fest.db"
-ACTIVE_EVENT_SLUG = "freeze-fest-2025"
+ACTIVE_EVENT_SLUG = "2025"
 EVENT_DEFINITIONS = [
     {
         "name": "Freeze Fest 2025",
@@ -27,7 +27,7 @@ EVENT_DEFINITIONS = [
     },
     {
         "name": "Freeze Fest 2024",
-        "slug": "freeze-fest-2024",
+        "slug": "2024",
         "description": "Tri-game series celebrating the end of mosquito season",
         "location": "South Valley, Albuquerque, NM",
         "event_date": date(2024, 11, 11),
@@ -60,8 +60,8 @@ SAMPLE_IMAGE = STATIC_DIR / "img/freezefest.png"
 SAMPLE_UPLOAD_NAME = "sample-freezefest.png"
 
 ACTIVE_EVENT_DEFINITION = {
-    "name": "Freeze Fest 2025",
-    "slug": "freeze-fest-2025",
+    "name": "Freeze Fest "+ACTIVE_EVENT_SLUG,
+    "slug": ACTIVE_EVENT_SLUG,
     "description": "Annual cornhole, bucket golf, and KanJam showdown",
     "location": "South Valley, Albuquerque, NM",
     "event_date": date(2025, 11, 15),
