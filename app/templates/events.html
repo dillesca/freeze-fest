@@ -66,7 +66,7 @@
         <div class="event-photos">
           {% for photo in card.photos %}
           <figure>
-            <img src="{{ request.url_for('static', path='uploads/' + photo.filename) }}" alt="Photo from {{ event.name }}" />
+            <img src="{{ photo.image_url }}" alt="Photo from {{ event.name }}" loading="lazy" />
             <figcaption>{{ photo.created_at.strftime('%b %d, %Y') }}</figcaption>
           </figure>
           {% endfor %}

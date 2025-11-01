@@ -42,6 +42,23 @@ The tests point `DATABASE_URL` at a temporary SQLite file to stay fast and isola
 - **Game rules** – `/rules` provides concise KanJam, Cornhole-to-11, and six-hole bucket golf summaries.
 - **Admin controls** – organizers log in at `/admin/login` to regenerate brackets, reset scores, and edit results.
 
+## Photo storage (Google Cloud Storage)
+
+By default uploaded photos land in `app/static/uploads/`. To stream them from Google Cloud Storage instead:
+
+1. Create a bucket (e.g. `freeze-fest-photos`) and enable public or CDN-backed access.
+2. Grant your Cloud Run service account the `roles/storage.objectAdmin` role for that bucket.
+3. Set the following environment variables (locally in `.env`, and in Cloud Run):
+
+```
+GCS_PHOTO_BUCKET=freeze-fest-photos
+# Optional overrides:
+# GCS_PHOTO_BASE_URL=https://cdn.example.com/freeze-fest-photos
+# GCS_PHOTO_CACHE_CONTROL=public, max-age=86400
+```
+
+With `GCS_PHOTO_BUCKET` set, new uploads stream directly to the bucket (`photos/<event-slug>/<uuid>.jpg`). Existing local files are still served from `/static/uploads/`.
+
 ## Playoffs format
 
 1. Top four leaderboard teams enter a bucket-golf semifinal (lowest two scores advance, ties replay a hole).  

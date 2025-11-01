@@ -50,7 +50,7 @@
           <div class="photo-carousel__viewport">
             {% for photo in photos %}
             <figure class="photo-slide{% if loop.first %} is-active{% endif %}">
-              <img src="{{ request.url_for('static', path='uploads/' + photo.filename) }}" alt="Freeze Fest photo uploaded on {{ photo.created_at.strftime('%b %d, %Y') }}" />
+              <img src="{{ photo.image_url }}" alt="Freeze Fest photo uploaded on {{ photo.created_at.strftime('%b %d, %Y') }}" />
               <figcaption>Uploaded {{ photo.created_at.strftime('%b %d, %Y %I:%M %p') }}</figcaption>
             </figure>
             {% endfor %}

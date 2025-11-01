@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import logging
 import hmac
 import itertools
 import math
@@ -22,6 +23,14 @@ from sqlmodel import Session, select
 from .bracket import GAMES, generate_schedule
 
 from .database import Event, FreeAgent, Match, Photo, RSVP, Team, UPLOAD_DIR, get_active_event, get_session
+from .storage import (
+    extract_object_name,
+    gcs_photos_enabled,
+    gcs_public_url,
+    is_gcs_identifier,
+    make_gcs_identifier,
+    upload_photo_stream,
+)
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -34,6 +43,15 @@ MAX_OPEN_MATCHES_PER_GAME = {
     "Bucket Golf": 2,
     "Bucket Golf Semifinal": 1,
 }
+
+logger = logging.getLogger(__name__)
+USE_GCS_PHOTOS = gcs_photos_enabled()
+
+
+def _ensure_upload_dir() -> None:
+    if not UPLOAD_DIR.exists():
+        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
 
 SCHEDULER_DEBUG: dict[str, object] = {}
 SESSION_COOKIE_NAME = os.getenv("ADMIN_SESSION_COOKIE", "freeze_admin_session")
@@ -480,13 +498,33 @@ async def upload_photo(
         context = _photo_context(session, photo_error=error)
         return _render(request, "photos.html", context, status_code=400)
 
-    filename = f"{uuid4().hex}{suffix}"
-    destination = UPLOAD_DIR / filename
-    image.file.seek(0)
-    with destination.open("wb") as buffer:
-        shutil.copyfileobj(image.file, buffer)
+    object_basename = f"{uuid4().hex}{suffix}"
+    storage_identifier = object_basename
 
-    photo = Photo(filename=filename, original_name=original_name, event_id=event.id)
+    try:
+        if USE_GCS_PHOTOS:
+            object_name = f"{event.slug}/photos/{object_basename}"
+            image.file.seek(0)
+            upload_photo_stream(image.file, object_name=object_name, content_type=content_type)
+            storage_identifier = make_gcs_identifier(object_name)
+        else:
+            _ensure_upload_dir()
+            destination = UPLOAD_DIR / object_basename
+            image.file.seek(0)
+            with destination.open("wb") as buffer:
+                shutil.copyfileobj(image.file, buffer)
+    except RuntimeError as exc:
+        logger.exception("Photo upload failed: %s", exc)
+        context = _photo_context(session, photo_error=str(exc))
+        return _render(request, "photos.html", context, status_code=500)
+    except Exception:
+        logger.exception("Unexpected error while uploading photo.")
+        context = _photo_context(
+            session, photo_error="We hit a snag saving that photo. Please try again."
+        )
+        return _render(request, "photos.html", context, status_code=500)
+
+    photo = Photo(filename=storage_identifier, original_name=original_name, event_id=event.id)
     session.add(photo)
     session.commit()
 
@@ -841,7 +879,7 @@ def _photo_context(
     photo_success: bool = False,
 ) -> dict[str, object]:
     event = get_active_event(session)
-    photos = _fetch_photos(session, event.id)
+    photos = _decorate_photo_urls(_fetch_photos(session, event.id))
     return {
         "event": event,
         "photos": photos,
@@ -861,7 +899,13 @@ def _events_context(session: Session) -> list[dict[str, object]]:
             .order_by(Photo.created_at.desc())
             .limit(4)
         ).all()
-        cards.append({"event": event, "photos": photos, "team_count": team_count})
+        cards.append(
+            {
+                "event": event,
+                "photos": _decorate_photo_urls(list(photos)),
+                "team_count": team_count,
+            }
+        )
     return cards
 
 
@@ -1464,6 +1508,30 @@ def _fetch_rsvps(session: Session, event_id: int):
 
 def _fetch_photos(session: Session, event_id: int):
     return session.exec(select(Photo).where(Photo.event_id == event_id).order_by(Photo.created_at.desc())).all()
+
+
+def _photo_image_url(photo: Photo) -> str:
+    identifier = photo.filename or ""
+    if not identifier:
+        return ""
+    if identifier.startswith(("http://", "https://")):
+        return identifier
+    if is_gcs_identifier(identifier):
+        object_name = extract_object_name(identifier)
+        try:
+            return gcs_public_url(object_name)
+        except RuntimeError:
+            base = os.getenv("GCS_PHOTO_BUCKET")
+            if base:
+                return f"https://storage.googleapis.com/{base}/{object_name}"
+            return object_name
+    return f"/static/uploads/{identifier}"
+
+
+def _decorate_photo_urls(photos: list[Photo]) -> list[Photo]:
+    for photo in photos:
+        photo.image_url = _photo_image_url(photo)
+    return photos
 
 
 def _team_context(
