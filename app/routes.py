@@ -10,6 +10,8 @@ from pathlib import Path
 from uuid import uuid4
 from urllib.parse import quote, urljoin
 
+from collections import defaultdict
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -1112,22 +1114,25 @@ def _ensure_matches(
 
 def _refresh_match_statuses(session: Session, event_id: int) -> None:
     matches = session.exec(select(Match).where(Match.event_id == event_id).order_by(Match.order_index)).all()
-    by_game: dict[str, list[Match]] = {}
-    for match in matches:
-        by_game.setdefault(match.game, []).append(match)
+    active_teams: set[int] = set()
+    game_counts: dict[str, int] = defaultdict(int)
 
-    for game_name, game_matches in by_game.items():
-        max_open = MAX_OPEN_MATCHES_PER_GAME.get(game_name, 1)
-        open_slots = 0
-        for match in game_matches:
-            if match.score_team1 is not None and match.score_team2 is not None:
-                match.status = "completed"
-                continue
-            if open_slots < max_open:
-                match.status = "in_progress"
-                open_slots += 1
-            else:
-                match.status = "pending"
+    for match in matches:
+        if match.score_team1 is not None and match.score_team2 is not None:
+            match.status = "completed"
+            continue
+
+        teams_in_match = {match.team1_id}
+        if match.team2_id != match.team1_id:
+            teams_in_match.add(match.team2_id)
+
+        max_open = MAX_OPEN_MATCHES_PER_GAME.get(match.game, 1)
+        if game_counts[match.game] < max_open and not (teams_in_match & active_teams):
+            match.status = "in_progress"
+            game_counts[match.game] += 1
+            active_teams.update(teams_in_match)
+        else:
+            match.status = "pending"
     session.commit()
 
 

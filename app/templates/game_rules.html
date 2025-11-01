@@ -28,7 +28,7 @@
           <img src="{{ request.url_for('static', path='img/freezefest.png') }}" alt="Freeze Fest mascot" loading="lazy" />
         </div>
         <h1>Freeze Fest Game Rules</h1>
-        <p class="page-subtitle">Quick reference for KanJam, Cornhole, and Bucket Golf play at {{ event.name }}.</p>
+        <p class="page-subtitle">Quick reference for KanJam, Cornhole, Bucket Golf, and Beersbee play at {{ event.name }}.</p>
         <nav class="page-nav" aria-label="Primary">
           <a href="{{ request.url_for('index') }}">RSVP</a>
           <a href="{{ request.url_for('team_directory') }}">Register a Team</a>
@@ -69,9 +69,20 @@
         <p class="section-intro">A short walking golf course with yard obstacles and buckets for holes.</p>
         <ul class="rule-list">
           <li>Each hole has a tee marker and a target bucket. Play the course in order for all six holes.</li>
-          <li>Sum your scores, lowest total throws wins. One-stroke penalty for unplayable liesl; resume from the previous spot.</li>
-          <li>Both team members play the hole themselves, take the best score.</li>
+          <li>Sum your scores, lowest total throws wins. One-stroke penalty for unplayable lies; resume from the previous spot.</li>
+          <li>Both partners play the hole independently and record the better score for the team.</li>
           <li>Ties for playoff seeding or advancement are settled by sudden-death extra holes starting from hole one.</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>Beersbee (Finale)</h2>
+        <p class="section-intro">A frisbee face-off where accuracy and quick reflexes earn the Freeze Fest trophy.</p>
+        <ul class="rule-list">
+          <li>Teams stand behind their poles (or stakes) set about 30 feet apart with a bottle perched on top.</li>
+          <li>Throwers aim to knock the bottle off the opponent’s pole; teammates must stay behind their line until release.</li>
+          <li>Scoring: bottle knocked cleanly = 2 points, pole hit and bottle caught before touching ground = 1 point to defense, dropped bottle = 1 point to offense.</li>
+          <li>Play to 11, win by 2. If tied at 10–10, alternate throws until one team leads after an equal number of turns.</li>
         </ul>
       </section>
     </main>
