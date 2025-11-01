@@ -133,7 +133,7 @@ async def bracket_page(request: Request, session: Session = Depends(get_session)
         "playoff-group-incomplete": ("Finish every round-robin match before starting the semifinal round.", True),
         "semis-created": ("Playoff semifinal round created. Post the new bucket golf scores below.", False),
         "semis-pending": ("Finish every semifinal score before creating the final.", True),
-        "semis-need-teams": ("Need at least four teams with results before starting the semifinals.", True),
+        "semis-need-teams": ("Need at least three teams with results before starting the semifinals.", True),
     }
     if status in messages:
         message, is_error = messages[status]
@@ -262,7 +262,7 @@ async def start_playoffs(request: Request, session: Session = Depends(get_sessio
                 session.delete(match)
             session.commit()
 
-        if len(leaderboard) < 4:
+        if len(leaderboard) < 3:
             redirect_url = str(request.url_for("bracket")) + "?playoff=semis-need-teams"
             return RedirectResponse(redirect_url, status_code=303)
 
@@ -270,7 +270,7 @@ async def start_playoffs(request: Request, session: Session = Depends(get_sessio
         team_ids = [entry["id"] for entry in top_four]
         teams = session.exec(select(Team).where(Team.id.in_(team_ids))).all()
         team_map = {team.id: team for team in teams}
-        if len(team_map) < 4:
+        if len(team_map) < len(top_four):
             redirect_url = str(request.url_for("bracket")) + "?playoff=semis-need-teams"
             return RedirectResponse(redirect_url, status_code=303)
 
@@ -1051,6 +1051,8 @@ def _ensure_matches(
     name_to_team = {team.name: team for team in teams}
     order = 1
 
+    trio_mode = len(teams) == 3
+
     for block in schedule:
         if block["game"] == "Bucket Golf" and bucket_pool_mode:
             for team in teams:
@@ -1060,6 +1062,25 @@ def _ensure_matches(
                     order_index=order,
                     team1_id=team.id,
                     team2_id=team.id,
+                )
+                session.add(match)
+                session.commit()
+                order += 1
+            continue
+
+        if trio_mode and block["game"] != "Bucket Golf":
+            trio_pairs = [
+                (teams[0], teams[1]),
+                (teams[0], teams[2]),
+                (teams[1], teams[2]),
+            ]
+            for team1, team2 in trio_pairs:
+                match = Match(
+                    event_id=event.id,
+                    game=block["game"],
+                    order_index=order,
+                    team1_id=team1.id,
+                    team2_id=team2.id,
                 )
                 session.add(match)
                 session.commit()
