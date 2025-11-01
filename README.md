@@ -1,6 +1,6 @@
 # Freeze Fest 2025 RSVP
 
-A lightweight FastAPI web app for the 2025 Freeze Fest triathlon (November 15, 2025, 1:00 PM). Guests can browse event details, RSVP, upload photos, and manage teams. All data is stored in PostgreSQL (local Docker Compose or Cloud SQL in Google Cloud).
+A lightweight FastAPI web app for the 2025 Freeze Fest triathlon (November 15, 2025, 12:00 PM). Guests can browse event details, RSVP, upload photos, and manage teams. All data is stored in PostgreSQL (local Docker Compose or Cloud SQL in Google Cloud).
 
 ## Quick start
 

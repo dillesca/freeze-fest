@@ -29,7 +29,19 @@ EVENT_DEFINITIONS = [
     {
         "name": "Freeze Fest 2024",
         "slug": "2024",
-        "description": "Tri-game series celebrating the end of mosquito season",
+        "description": (
+            "Freeze Fest 2024 was a beautiful sunny day. It began with Oompa Do yelling, "
+            "\"PLEASE DON'T BURN LEAVES TODAY!\" across the neighbors' yards while Dan and "
+            "Maely looked on—confused and slightly embarrassed. Friends trickled in, enchiladas "
+            "hit the tables, and the good company set the tone for the afternoon.\n\n"
+            "Once play started, the organizers quickly realized the paper brackets couldn't keep "
+            "up with the action. The scramble to coordinate matches is what ultimately inspired "
+            "the Freeze Fest website.\n\nAfter group play, controversy struck. One team dominated "
+            "every game, yet a championship round hadn't been clearly announced. A three-team "
+            "playoff settled the debate, John and Stefan advanced, and they went on to win the "
+            "final. As the sun dipped too quickly, the evening closed with stories about making "
+            "tortillas around the fire."
+        ),
         "location": "South Valley, Albuquerque, NM",
         "event_date": date(2024, 11, 16),
         "games": "Cornhole, KanJam, Rollors",
