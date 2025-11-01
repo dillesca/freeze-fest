@@ -1331,7 +1331,9 @@ body {
 }
 
 .photo-carousel--compact .photo-carousel__viewport {
-  max-height: 220px;
+  max-height: 260px;
+  max-width: 560px;
+  margin: 0 auto;
 }
 
 .photo-slide {
@@ -1352,7 +1354,10 @@ body {
 }
 
 .photo-carousel--compact .photo-slide img {
-  height: 220px;
+  width: 100%;
+  height: auto;
+  max-height: 260px;
+  object-fit: contain;
 }
 
 .photo-slide figcaption {
