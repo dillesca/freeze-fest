@@ -132,6 +132,14 @@
               {% if block.game == 'Bucket Golf' %}
               <p class="match-note">Lowest score wins</p>
               {% endif %}
+              {% if game_byes and game_byes.get(block.game) %}
+              <p class="match-bye">
+                {{ game_byes.get(block.game)|join(', ') }}
+                {% if game_byes.get(block.game)|length == 1 %}has{% else %}have{% endif %}
+                a {{ block.game }} bye this round because we have an odd number of teams.
+                They’ll make up the reps in an extra KanJam showdown.
+              </p>
+              {% endif %}
             </header>
             <ul class="match-list">
               {% for match in block.matches %}
@@ -231,11 +239,12 @@
           {% for row in leaderboard %}
           <li class="leaderboard__row{% if loop.index <= 4 %} leaderboard__row--playoff{% endif %}">
             <span class="leaderboard__team">{{ loop.index }}. {{ row.name }}</span>
-            {% if bucket_pool_mode %}
-            <span class="leaderboard__stat">Bucket score: {{ row.bucket_score if row.bucket_score is not none else '—' }}</span>
-            {% else %}
-            <span class="leaderboard__stat">Wins: {{ row.wins }}</span>
+            <span class="leaderboard__stat">
+              Record: {{ row.wins }}-{{ row.losses }}{% if row.ties %}-{{ row.ties }}{% endif %}
+            </span>
             <span class="leaderboard__stat">Games: {{ row.games }}</span>
+            {% if row.bucket_score is not none %}
+            <span class="leaderboard__stat">Bucket score: {{ row.bucket_score }}</span>
             {% endif %}
           </li>
           {% endfor %}
@@ -253,11 +262,11 @@
           {% for row in top_four %}
           <li class="playoff-list__item">
             <span class="playoff-list__name">{{ row.name }}</span>
-            {% if bucket_pool_mode %}
-            <span class="playoff-list__stat">Record: {{ row.wins }}-{{ row.games - row.wins }}</span>
-            <span class="playoff-list__stat">Bucket score: {{ row.bucket_score if row.bucket_score is not none else '—' }}</span>
-            {% else %}
-            <span class="playoff-list__stat">Record: {{ row.wins }}-{{ row.games - row.wins }}</span>
+            <span class="playoff-list__stat">
+              Record: {{ row.wins }}-{{ row.losses }}{% if row.ties %}-{{ row.ties }}{% endif %}
+            </span>
+            {% if row.bucket_score is not none %}
+            <span class="playoff-list__stat">Bucket score: {{ row.bucket_score }}</span>
             {% endif %}
           </li>
           {% endfor %}

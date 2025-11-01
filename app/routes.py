@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import copy
 import hmac
+import itertools
 import math
 import os
 import secrets
@@ -29,10 +31,11 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 ALLOWED_FREE_AGENT_STATUSES = {"pending", "paired"}
 
 MAX_OPEN_MATCHES_PER_GAME = {
-    "Bucket Golf": 8,
-    "Bucket Golf Semifinal": 4,
+    "Bucket Golf": 2,
+    "Bucket Golf Semifinal": 1,
 }
 
+SCHEDULER_DEBUG: dict[str, object] = {}
 SESSION_COOKIE_NAME = os.getenv("ADMIN_SESSION_COOKIE", "freeze_admin_session")
 SESSION_SECRET = os.getenv("ADMIN_SESSION_SECRET") or os.getenv("SECRET_KEY") or secrets.token_hex(32)
 SESSION_MAX_AGE = int(os.getenv("ADMIN_SESSION_MAX_AGE", "43200"))  # 12 hours default
@@ -863,7 +866,9 @@ def _events_context(session: Session) -> list[dict[str, object]]:
 
 
 def _needs_bucket_pool(team_count: int) -> bool:
-    return team_count < len(GAMES) + 1
+    if team_count <= 0:
+        return False
+    return team_count < len(GAMES) + 1 or team_count % 2 == 1
 
 
 def _schedule_context(session: Session) -> dict[str, object]:
@@ -897,6 +902,7 @@ def _schedule_context(session: Session) -> dict[str, object]:
 
     matches_by_game = []
     next_matches = []
+    game_participants: dict[str, set[int]] = {game: set() for game in GAMES}
     for game in GAMES:
         grouped = [payload for payload in match_payload if payload["game"] == game]
         if not grouped:
@@ -905,7 +911,22 @@ def _schedule_context(session: Session) -> dict[str, object]:
         next_match = next((payload for payload in grouped if payload["status"] != "completed"), None)
         if next_match:
             next_matches.append({"game": game, "match": next_match})
+        for payload in grouped:
+            game_participants.setdefault(game, set()).add(payload["team1_id"])
+            if payload["team2_id"] != payload["team1_id"]:
+                game_participants.setdefault(game, set()).add(payload["team2_id"])
         matches_by_game.append({"game": game, "matches": grouped})
+
+    game_byes: dict[str, list[str]] = {}
+    total_teams = {team.id: team.name for team in teams}
+    for game, participants in game_participants.items():
+        missing = [
+            total_teams[team_id]
+            for team_id in total_teams
+            if team_id not in participants
+        ]
+        if missing:
+            game_byes[game] = sorted(missing)
 
     leaderboard = _build_leaderboard(match_payload, team_lookup, bucket_pool_mode)
     playoff_match_obj = session.exec(
@@ -1031,6 +1052,7 @@ def _schedule_context(session: Session) -> dict[str, object]:
         "champion": champion,
         "final_tie": final_tie,
         "group_stage_complete": group_stage_complete,
+        "game_byes": game_byes,
     }
 
 
@@ -1049,24 +1071,320 @@ def _ensure_matches(
         return []
 
     participants = [team.name for team in teams]
-    schedule = generate_schedule(participants)
     name_to_team = {team.name: team for team in teams}
-    order = 1
-
+    id_to_name = {team.id: team.name for team in teams}
+    team_ids = [team.id for team in teams]
     trio_mode = len(teams) == 3
+
+    def select_slot(game_lists: dict[str, list[dict[str, str | None]]], game_order: list[str]) -> list[tuple[str, int]]:
+        best: list[tuple[str, int]] = []
+        best_key: tuple[int, int] = (0, 0)
+
+        def backtrack(idx: int, used: set[int], picked: list[tuple[str, int]], idx_sum: int) -> None:
+            nonlocal best, best_key
+            if idx == len(game_order):
+                key = (len(picked), -idx_sum)
+                if key > best_key:
+                    best_key = key
+                    best = picked.copy()
+                return
+
+            game = game_order[idx]
+            queue = game_lists.get(game, [])
+
+            backtrack(idx + 1, used, picked, idx_sum)
+
+            for position, matchup in enumerate(queue):
+                team1 = name_to_team.get(matchup.get("team1")) if matchup.get("team1") else None
+                team2 = name_to_team.get(matchup.get("team2")) if matchup.get("team2") else None
+                if not team1:
+                    continue
+                ids = {team1.id}
+                if team2 and team2.id != team1.id:
+                    ids.add(team2.id)
+                if ids & used:
+                    continue
+                picked.append((game, position))
+                backtrack(idx + 1, used | ids, picked, idx_sum + position)
+                picked.pop()
+
+        backtrack(0, set(), [], 0)
+        return best
+
+    def build_slots(game_lists: dict[str, list[dict[str, str | None]]]) -> list[list[tuple[str, int, int]]]:
+        lists = copy.deepcopy(game_lists)
+        slots: list[list[tuple[str, int, int]]] = []
+        safety_counter = 0
+        max_iterations = sum(len(lists[game]) for game in GAMES) * 5 or 1
+        game_order = list(GAMES)
+
+        while any(lists[game] for game in GAMES) and safety_counter < max_iterations:
+            safety_counter += 1
+            selection = select_slot(lists, game_order)
+
+            if not selection:
+                fallback_game = next((game for game in GAMES if lists.get(game)), None)
+                if fallback_game is None:
+                    break
+                selection = [(fallback_game, 0)]
+
+            slot: list[tuple[str, int, int]] = []
+            used_ids: set[int] = set()
+
+            for game, index in sorted(selection, key=lambda item: item[1], reverse=True):
+                queue = lists.get(game, [])
+                if index >= len(queue):
+                    continue
+                matchup = queue.pop(index)
+                team1 = name_to_team.get(matchup.get("team1")) if matchup.get("team1") else None
+                team2 = name_to_team.get(matchup.get("team2")) if matchup.get("team2") else None
+                if not team1:
+                    continue
+                team2_id = team1.id if not team2 else team2.id
+                slot.append((game, team1.id, team2_id))
+                used_ids.add(team1.id)
+                if team2_id != team1.id:
+                    used_ids.add(team2_id)
+
+            if not slot:
+                break
+
+            for game in GAMES:
+                max_open = MAX_OPEN_MATCHES_PER_GAME.get(game, 1)
+                if max_open <= 1:
+                    continue
+                queue = lists.get(game, [])
+                position = 0
+                while position < len(queue) and sum(1 for g, _, _ in slot if g == game) < max_open:
+                    matchup = queue[position]
+                    team1 = name_to_team.get(matchup.get("team1")) if matchup.get("team1") else None
+                    team2 = name_to_team.get(matchup.get("team2")) if matchup.get("team2") else None
+                    if not team1:
+                        queue.pop(position)
+                        continue
+                    ids = {team1.id}
+                    if team2 and team2.id != team1.id:
+                        ids.add(team2.id)
+                    if ids & used_ids:
+                        position += 1
+                        continue
+                    queue.pop(position)
+                    team2_id = team1.id if not team2 else team2.id
+                    slot.append((game, team1.id, team2_id))
+                    used_ids.update(ids)
+
+            slot.sort(key=lambda item: GAMES.index(item[0]))
+            slots.append(slot)
+            game_order = game_order[1:] + game_order[:1]
+
+        return slots
+
+    def build_candidate_sets(team_identifiers: list[int], required: int) -> list[tuple[tuple[int, int], ...]]:
+        if required <= 0:
+            return [tuple()]
+        pairs = [
+            (team_identifiers[i], team_identifiers[j])
+            for i in range(len(team_identifiers))
+            for j in range(i + 1, len(team_identifiers))
+        ]
+        candidates: list[tuple[tuple[int, int], ...]] = []
+        for combo in itertools.combinations(pairs, required):
+            usage: dict[int, int] = {}
+            valid = True
+            for team1_id, team2_id in combo:
+                for identifier in (team1_id, team2_id):
+                    usage[identifier] = usage.get(identifier, 0) + 1
+                    if usage[identifier] > 1:
+                        valid = False
+                        break
+                if not valid:
+                    break
+            if not valid:
+                continue
+            if len(usage) != required * 2:
+                continue
+            candidates.append(combo)
+        return candidates
+
+    games_for_pairs = [game for game in GAMES if not (bucket_pool_mode and game == "Bucket Golf")]
+    required_matches = (len(team_ids) // 2) if games_for_pairs else 0
+    candidates_by_game: dict[str, list[tuple[tuple[int, int], ...]]] = {
+        game: build_candidate_sets(team_ids, required_matches) for game in games_for_pairs
+    }
+
+    total_matches_needed = len(games_for_pairs) * required_matches
+    unique_pairs_available = len(team_ids) * (len(team_ids) - 1) // 2
+    duplicate_budget = max(0, total_matches_needed - unique_pairs_available)
+
+    best_assignment: dict[str, tuple[tuple[int, int], ...]] | None = None
+    best_score: tuple[int, int, int, int] | None = None
+
+    if games_for_pairs and all(candidates_by_game.get(game) for game in games_for_pairs):
+        def backtrack(
+            index: int,
+            pair_usage: dict[tuple[int, int], int],
+            assignments: dict[str, tuple[tuple[int, int], ...]],
+            per_team_totals: dict[int, int],
+            per_game_penalty: int,
+            duplicates_used: int,
+            bye_counter: dict[int, int],
+            bye_penalty: int,
+        ) -> None:
+            nonlocal best_assignment, best_score
+            if index == len(games_for_pairs):
+                values = list(per_team_totals.values())
+                variance = (max(values) - min(values)) if values else 0
+                score = (per_game_penalty, duplicates_used, variance, bye_penalty)
+                if best_score is None or score < best_score:
+                    best_score = score
+                    best_assignment = assignments.copy()
+                return
+
+            game = games_for_pairs[index]
+            for combo in candidates_by_game[game]:
+                additional_duplicates = sum(1 for pair in combo if pair_usage.get(pair, 0) > 0)
+                if duplicates_used + additional_duplicates > duplicate_budget:
+                    continue
+
+                updated_usage = pair_usage.copy()
+                updated_totals = per_team_totals.copy()
+                counts: defaultdict[int, int] = defaultdict(int)
+                used_teams: set[int] = set()
+
+                for team1_id, team2_id in combo:
+                    pair = (team1_id, team2_id)
+                    updated_usage[pair] = updated_usage.get(pair, 0) + 1
+                    updated_totals[team1_id] += 1
+                    updated_totals[team2_id] += 1
+                    counts[team1_id] += 1
+                    counts[team2_id] += 1
+                    used_teams.add(team1_id)
+                    used_teams.add(team2_id)
+
+                penalty = sum(max(0, count - 1) for count in counts.values())
+                bye_team = next((identifier for identifier in team_ids if identifier not in used_teams), None)
+                updated_byes = bye_counter.copy()
+                updated_bye_penalty = bye_penalty
+                if bye_team is not None:
+                    updated_byes[bye_team] = updated_byes.get(bye_team, 0) + 1
+                    if updated_byes[bye_team] > 1:
+                        updated_bye_penalty += 1
+
+                assignments[game] = combo
+                backtrack(
+                    index + 1,
+                    updated_usage,
+                    assignments,
+                    updated_totals,
+                    per_game_penalty + penalty,
+                    duplicates_used + additional_duplicates,
+                    updated_byes,
+                    updated_bye_penalty,
+                )
+                assignments.pop(game, None)
+
+        initial_totals = {team_id: 0 for team_id in team_ids}
+        backtrack(0, {}, {}, initial_totals, 0, 0, {}, 0)
+        SCHEDULER_DEBUG["best_assignment"] = best_assignment
+        SCHEDULER_DEBUG["best_score"] = best_score
+    elif not games_for_pairs:
+        best_assignment = {}
+
+    if best_assignment is not None:
+        game_lists: dict[str, list[dict[str, str | None]]] = {game: [] for game in GAMES}
+        byes_by_game: dict[str, list[int]] = {}
+        for game, combo in best_assignment.items():
+            used: set[int] = set()
+            for team1_id, team2_id in sorted(combo):
+                game_lists[game].append(
+                    {"team1": id_to_name[team1_id], "team2": id_to_name[team2_id]}
+                )
+                used.add(team1_id)
+                used.add(team2_id)
+            missing = [identifier for identifier in team_ids if identifier not in used]
+            if missing:
+                byes_by_game[game] = missing
+
+        if len(team_ids) % 2 == 1:
+            bye_candidates: list[int] = []
+            for game in games_for_pairs:
+                bye_candidates.extend(byes_by_game.get(game, []))
+            unique_byes: list[int] = []
+            for team_id in bye_candidates:
+                if team_id not in unique_byes:
+                    unique_byes.append(team_id)
+                if len(unique_byes) == 2:
+                    break
+            if len(unique_byes) == 2:
+                bye_team_a, bye_team_b = unique_byes
+                game_lists.setdefault("KanJam", []).append(
+                    {"team1": id_to_name[bye_team_a], "team2": id_to_name[bye_team_b]}
+                )
+
+        if bucket_pool_mode:
+            game_lists["Bucket Golf"] = [
+                {"team1": team.name, "team2": team.name} for team in teams
+            ]
+
+        slots = build_slots(game_lists)
+        expected_matches = sum(len(entries) for entries in game_lists.values())
+        planned_matches = sum(len(slot) for slot in slots)
+        if slots and planned_matches == expected_matches:
+            order = 1
+            for slot in slots:
+                for game, team1_id, team2_id in slot:
+                    if team2_id == team1_id and game != "Bucket Golf":
+                        continue
+                    match = Match(
+                        event_id=event.id,
+                        game=game,
+                        order_index=order,
+                        team1_id=team1_id,
+                        team2_id=team2_id,
+                    )
+                    session.add(match)
+                    order += 1
+            session.commit()
+            return session.exec(select(Match).where(Match.event_id == event.id)).all()
+        else:
+            order = 1
+            for game in GAMES:
+                for entry in game_lists.get(game, []):
+                    team1 = name_to_team.get(entry.get("team1"))
+                    team2 = name_to_team.get(entry.get("team2")) if entry.get("team2") else None
+                    if not team1:
+                        continue
+                    team2_id = team1.id if not team2 else team2.id
+                    if team2_id == team1.id and game != "Bucket Golf":
+                        continue
+                    match = Match(
+                        event_id=event.id,
+                        game=game,
+                        order_index=order,
+                        team1_id=team1.id,
+                        team2_id=team2_id,
+                    )
+                    session.add(match)
+                    order += 1
+            session.commit()
+            return session.exec(select(Match).where(Match.event_id == event.id)).all()
+
+    schedule = generate_schedule(participants)
+    order = 1
+    pending_matches: list[Match] = []
 
     for block in schedule:
         if block["game"] == "Bucket Golf" and bucket_pool_mode:
             for team in teams:
-                match = Match(
-                    event_id=event.id,
-                    game=block["game"],
-                    order_index=order,
-                    team1_id=team.id,
-                    team2_id=team.id,
+                pending_matches.append(
+                    Match(
+                        event_id=event.id,
+                        game=block["game"],
+                        order_index=order,
+                        team1_id=team.id,
+                        team2_id=team.id,
+                    )
                 )
-                session.add(match)
-                session.commit()
                 order += 1
             continue
 
@@ -1077,15 +1395,15 @@ def _ensure_matches(
                 (teams[1], teams[2]),
             ]
             for team1, team2 in trio_pairs:
-                match = Match(
-                    event_id=event.id,
-                    game=block["game"],
-                    order_index=order,
-                    team1_id=team1.id,
-                    team2_id=team2.id,
+                pending_matches.append(
+                    Match(
+                        event_id=event.id,
+                        game=block["game"],
+                        order_index=order,
+                        team1_id=team1.id,
+                        team2_id=team2.id,
+                    )
                 )
-                session.add(match)
-                session.commit()
                 order += 1
             continue
 
@@ -1098,16 +1416,20 @@ def _ensure_matches(
             team2 = name_to_team.get(team2_name)
             if not team1 or not team2:
                 continue
-            match = Match(
-                event_id=event.id,
-                game=block["game"],
-                order_index=order,
-                team1_id=team1.id,
-                team2_id=team2.id,
+            pending_matches.append(
+                Match(
+                    event_id=event.id,
+                    game=block["game"],
+                    order_index=order,
+                    team1_id=team1.id,
+                    team2_id=team2.id,
+                )
             )
-            session.add(match)
-            session.commit()
             order += 1
+
+    for match in pending_matches:
+        session.add(match)
+    session.commit()
 
     return session.exec(select(Match).where(Match.event_id == event.id)).all()
 
@@ -1246,6 +1568,7 @@ def _build_leaderboard(
         stats[team_id] = {
             "name": name,
             "wins": 0,
+            "ties": 0,
             "games": 0,
             "points_scored": 0,
             "points_allowed": 0,
@@ -1263,6 +1586,7 @@ def _build_leaderboard(
             stats[team1_id] = {
                 "name": team_lookup.get(team1_id, "Team"),
                 "wins": 0,
+                "ties": 0,
                 "games": 0,
                 "points_scored": 0,
                 "points_allowed": 0,
@@ -1271,6 +1595,7 @@ def _build_leaderboard(
             stats[team2_id] = {
                 "name": team_lookup.get(team2_id, "Team"),
                 "wins": 0,
+                "ties": 0,
                 "games": 0,
                 "points_scored": 0,
                 "points_allowed": 0,
@@ -1291,7 +1616,7 @@ def _build_leaderboard(
                 current_two = bucket_scores.get(team2_id)
                 if current_two is None or score2 < current_two:
                     bucket_scores[team2_id] = score2
-            # Solo bucket runs don't generate wins but still count as games.
+            # Solo bucket runs skip head-to-head stats; wins are assigned after all scores are in.
             if team1_id == team2_id:
                 continue
 
@@ -1305,12 +1630,42 @@ def _build_leaderboard(
         elif score2 > score1:
             stats[team2_id]["wins"] += 1
 
+    if bucket_pool_mode:
+        completed_runs = [
+            (team_id, score) for team_id, score in bucket_scores.items() if score is not None
+        ]
+        if completed_runs and len(completed_runs) == len(team_lookup):
+            completed_runs.sort(key=lambda item: (item[1], stats[item[0]]["name"]))
+            midpoint = len(completed_runs) // 2
+            winners: set[int] = set()
+            ties: set[int] = set()
+
+            if len(completed_runs) % 2 == 0:
+                for index, (team_id, _) in enumerate(completed_runs):
+                    if index < midpoint:
+                        winners.add(team_id)
+                losers_start = midpoint
+            else:
+                for index, (team_id, _) in enumerate(completed_runs):
+                    if index < midpoint:
+                        winners.add(team_id)
+                ties.add(completed_runs[midpoint][0])
+                losers_start = midpoint + 1
+
+            for team_id in winners:
+                stats[team_id]["wins"] += 1
+            for team_id in ties:
+                stats[team_id]["ties"] += 1
+
     leaderboard = []
     for team_id, record in stats.items():
+        losses = record["games"] - record["wins"] - record["ties"]
         entry = {
             "id": team_id,
             "name": record["name"],
             "wins": record["wins"],
+            "ties": record["ties"],
+            "losses": losses,
             "games": record["games"],
             "bucket_score": bucket_scores.get(team_id),
             "points_scored": record["points_scored"],
@@ -1319,7 +1674,11 @@ def _build_leaderboard(
         leaderboard.append(entry)
 
     def sort_key(item: dict[str, object]) -> tuple:
-        win_pct = (item["wins"] / item["games"]) if item["games"] else 0
+        wins = item["wins"]
+        ties = item.get("ties", 0)
+        games = item["games"]
+        adjusted_wins = wins + 0.5 * ties
+        win_pct = (adjusted_wins / games) if games else 0
         bucket_rank = item["bucket_score"] if item["bucket_score"] is not None else float("inf")
         point_diff = item["points_scored"] - item["points_allowed"]
         points_scored = item["points_scored"]
