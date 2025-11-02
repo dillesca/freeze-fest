@@ -66,7 +66,13 @@
         </ul>
         {% if card.winner_image_url %}
         <figure class="event-card__winner">
-          <img src="{{ card.winner_image_url }}" alt="Winners of {{ event.name }}" loading="lazy" />
+          <img
+            src="{{ card.winner_image_url }}"
+            alt="Winners of {{ event.name }}"
+            loading="lazy"
+            data-lightbox-src="{{ card.winner_image_url }}"
+            data-lightbox-label="Winners of {{ event.name }}"
+          />
         </figure>
         {% elif card.photos %}
         <div class="photo-carousel photo-carousel--compact" role="region" aria-label="Photos from {{ event.name }}">
@@ -74,7 +80,13 @@
           <div class="photo-carousel__viewport">
             {% for photo in card.photos %}
             <figure class="photo-slide{% if loop.first %} is-active{% endif %}">
-              <img src="{{ photo.image_url }}" alt="Photo from {{ event.name }}" loading="lazy" />
+              <img
+                src="{{ photo.image_url }}"
+                alt="Photo from {{ event.name }}"
+                loading="lazy"
+                data-lightbox-src="{{ photo.image_url }}"
+                data-lightbox-label="{{ photo.original_name or ('Photo from ' ~ event.name) }}"
+              />
             </figure>
             {% endfor %}
           </div>
@@ -95,5 +107,6 @@
       {% endfor %}
       </div>
     </main>
+    <script src="{{ request.url_for('static', path='js/main.js') }}" defer></script>
   </body>
 </html>

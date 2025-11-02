@@ -9,6 +9,7 @@ import os
 import secrets
 import shutil
 import time
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
@@ -17,7 +18,7 @@ from urllib.parse import quote, urljoin
 from collections import defaultdict
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select, func
 
@@ -66,6 +67,7 @@ MAX_OPEN_MATCHES_PER_GAME = {
 logger = logging.getLogger(__name__)
 USE_GCS_PHOTOS = gcs_photos_enabled()
 EVENT_GALLERY_PREVIEW_LIMIT = 12
+CAST_PHOTO_LIMIT = 40
 
 
 def _ensure_upload_dir() -> None:
@@ -401,6 +403,19 @@ async def photos_page(request: Request, session: Session = Depends(get_session))
         success_count = None
     context = _photo_context(session, photo_success=success, photo_success_count=success_count)
     return _render(request, "photos.html", context)
+
+
+@router.get("/cast", response_class=HTMLResponse, name="cast_display")
+async def cast_display(request: Request, session: Session = Depends(get_session)):
+    cast_state = _cast_state(session)
+    context = {"cast_state": cast_state}
+    return _render(request, "cast.html", context)
+
+
+@router.get("/cast/feed", name="cast_feed")
+async def cast_feed(session: Session = Depends(get_session)):
+    cast_state = _cast_state(session)
+    return JSONResponse(cast_state, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/events", response_class=HTMLResponse, name="events_page")
@@ -1679,6 +1694,104 @@ def _photo_payload(photo: Photo) -> dict[str, object]:
         "created_at": photo.created_at,
         "original_name": photo.original_name,
         "event_id": photo.event_id,
+    }
+
+
+def _cast_match_payload(match: Match | None, team_lookup: dict[int, str]) -> dict[str, object] | None:
+    if not match:
+        return None
+
+    team1_name = team_lookup.get(match.team1_id, "TBD")
+    is_bye = match.team1_id == match.team2_id
+    team2_name = None if is_bye else team_lookup.get(match.team2_id, "TBD")
+
+    return {
+        "id": match.id,
+        "team1": team1_name,
+        "team2": team2_name,
+        "is_bye": is_bye,
+        "status": match.status,
+        "score1": match.score_team1,
+        "score2": match.score_team2,
+        "order": match.order_index,
+    }
+
+
+def _cast_state(session: Session) -> dict[str, object]:
+    event = get_active_event(session)
+    _refresh_match_statuses(session, event.id)
+
+    teams = session.exec(
+        select(Team)
+        .where(Team.event_id == event.id)
+        .order_by(Team.created_at)
+    ).all()
+    team_lookup = {team.id: team.name for team in teams}
+
+    match_query = (
+        select(Match)
+        .where(Match.event_id == event.id)
+        .order_by(Match.order_index)
+    )
+    matches = session.exec(match_query).all()
+
+    grouped_matches: dict[str, list[Match]] = {}
+    for match in matches:
+        grouped_matches.setdefault(match.game, []).append(match)
+
+    games_payload: list[dict[str, object]] = []
+    for game_name, items in sorted(
+        grouped_matches.items(), key=lambda entry: min(match.order_index for match in entry[1])
+    ):
+        items.sort(key=lambda match: match.order_index)
+        current_match = next((match for match in items if match.status == "in_progress"), None)
+        pending_matches = [
+            match for match in items if match.status == "pending" and (not current_match or match.id != current_match.id)
+        ]
+        next_match = pending_matches[0] if pending_matches else None
+        remaining_count = sum(1 for match in items if match.status in {"pending", "in_progress"})
+
+        games_payload.append(
+            {
+                "game": game_name,
+                "current": _cast_match_payload(current_match, team_lookup),
+                "next": _cast_match_payload(next_match, team_lookup),
+                "remaining": remaining_count,
+                "upcoming_queue": [
+                    _cast_match_payload(match, team_lookup) for match in pending_matches[1:3]
+                ],
+            }
+        )
+
+    photo_query = (
+        select(Photo)
+        .where(Photo.event_id == event.id)
+        .order_by(Photo.created_at.desc())
+        .limit(CAST_PHOTO_LIMIT)
+    )
+    photo_rows = session.exec(photo_query).all()
+    photo_rows.reverse()
+
+    photos_payload = [
+        {
+            "id": photo.id,
+            "image_url": _photo_image_url(photo.filename),
+            "created_at": photo.created_at.isoformat() if photo.created_at else None,
+            "original_name": photo.original_name,
+        }
+        for photo in photo_rows
+    ]
+
+    return {
+        "event": {
+            "name": event.name,
+            "slug": event.slug,
+            "location": event.location,
+            "event_date": event.event_date.isoformat() if event.event_date else None,
+        },
+        "generated_at": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+        "photos": photos_payload,
+        "games": games_payload,
     }
 
 

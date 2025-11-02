@@ -72,4 +72,98 @@ document.addEventListener("DOMContentLoaded", () => {
       fileNameLabel.textContent = `${files.length} files selected`;
     }
   });
+
+  document.querySelectorAll("[data-rsvp-cancel]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const form = button.closest("form");
+      const details = button.closest("details");
+      form?.reset();
+      if (details) {
+        details.open = false;
+      }
+    });
+  });
+
+  const initLightbox = () => {
+    const triggers = Array.from(document.querySelectorAll("[data-lightbox-src]"));
+    if (triggers.length === 0) {
+      return;
+    }
+
+    let lastFocused = null;
+
+    const overlay = document.createElement("div");
+    overlay.className = "lightbox-overlay";
+    overlay.innerHTML = `
+      <div class="lightbox-overlay__backdrop" data-lightbox-close></div>
+      <figure class="lightbox-overlay__content" role="dialog" aria-modal="true" aria-label="Expanded photo view">
+        <button type="button" class="lightbox-overlay__close" aria-label="Close photo" data-lightbox-close>&times;</button>
+        <img class="lightbox-overlay__image" src="" alt="" data-lightbox-image />
+        <figcaption class="lightbox-overlay__caption" data-lightbox-caption></figcaption>
+      </figure>
+    `;
+    document.body.appendChild(overlay);
+
+    const imageEl = overlay.querySelector("[data-lightbox-image]");
+    const captionEl = overlay.querySelector("[data-lightbox-caption]");
+    const closeControls = overlay.querySelectorAll("[data-lightbox-close]");
+    const closeButton = overlay.querySelector(".lightbox-overlay__close");
+
+    const close = () => {
+      overlay.classList.remove("is-visible");
+      document.body.classList.remove("lightbox-open");
+      imageEl.src = "";
+      imageEl.alt = "";
+      captionEl.textContent = "";
+      if (lastFocused && typeof lastFocused.focus === "function") {
+        lastFocused.focus();
+      }
+      lastFocused = null;
+    };
+
+    const open = (src, label, altText) => {
+      if (!src) return;
+      imageEl.src = src;
+      const safeLabel = label || "Freeze Fest photo";
+      imageEl.alt = altText || safeLabel;
+      captionEl.textContent = safeLabel;
+      overlay.classList.add("is-visible");
+      document.body.classList.add("lightbox-open");
+      window.requestAnimationFrame(() => {
+        closeButton?.focus();
+      });
+    };
+
+    triggers.forEach((trigger) => {
+      trigger.addEventListener("click", (event) => {
+        event.preventDefault();
+        const src = trigger.getAttribute("data-lightbox-src") || trigger.getAttribute("src");
+        const label = trigger.getAttribute("data-lightbox-label") || trigger.getAttribute("alt");
+        const altText = trigger.getAttribute("alt");
+        lastFocused = trigger;
+        open(src, label, altText);
+      });
+    });
+
+    closeControls.forEach((control) => {
+      control.addEventListener("click", (event) => {
+        event.preventDefault();
+        close();
+      });
+    });
+
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay || event.target.classList.contains("lightbox-overlay__backdrop")) {
+        close();
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && overlay.classList.contains("is-visible")) {
+        close();
+      }
+    });
+  };
+
+  initLightbox();
 });

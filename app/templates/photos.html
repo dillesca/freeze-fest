@@ -48,7 +48,13 @@
         <div class="photo-gallery">
           {% for photo in photos %}
           <figure class="photo-gallery__item">
-            <img src="{{ photo.image_url }}" alt="Freeze Fest photo uploaded on {{ photo.created_at.strftime('%b %d, %Y %I:%M %p') }}" loading="lazy" />
+            <img
+              src="{{ photo.image_url }}"
+              alt="Freeze Fest photo uploaded on {{ photo.created_at.strftime('%b %d, %Y %I:%M %p') }}"
+              loading="lazy"
+              data-lightbox-src="{{ photo.image_url }}"
+              data-lightbox-label="{{ photo.original_name or 'Freeze Fest photo' }}"
+            />
           </figure>
           {% endfor %}
         </div>

@@ -69,7 +69,13 @@
 
         {% if winner_photo_url %}
         <figure class="event-detail__winner">
-          <img src="{{ winner_photo_url }}" alt="Winners of {{ event.name }}" loading="lazy" />
+          <img
+            src="{{ winner_photo_url }}"
+            alt="Winners of {{ event.name }}"
+            loading="lazy"
+            data-lightbox-src="{{ winner_photo_url }}"
+            data-lightbox-label="Winners of {{ event.name }}"
+          />
           {% if event.winners %}
           <figcaption>{{ event.winners }}</figcaption>
           {% endif %}
@@ -82,7 +88,13 @@
           <div class="event-gallery__masonry">
             {% for photo in photos %}
             <figure class="event-gallery__item">
-              <img src="{{ photo.image_url }}" alt="Photo from {{ event.name }}" loading="lazy" />
+              <img
+                src="{{ photo.image_url }}"
+                alt="Photo from {{ event.name }}"
+                loading="lazy"
+                data-lightbox-src="{{ photo.image_url }}"
+                data-lightbox-label="{{ photo.original_name or ('Photo from ' ~ event.name) }}"
+              />
             </figure>
             {% endfor %}
           </div>
