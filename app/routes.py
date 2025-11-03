@@ -2556,6 +2556,7 @@ def _cast_state(session: Session) -> dict[str, object]:
         .order_by(Team.created_at)
     ).all()
     team_lookup = {team.id: team.name for team in teams}
+    bucket_pool_mode = _needs_bucket_pool(len(teams))
 
     match_query = (
         select(Match)
@@ -2563,6 +2564,24 @@ def _cast_state(session: Session) -> dict[str, object]:
         .order_by(Match.order_index)
     )
     matches = session.exec(match_query).all()
+    non_playoff_matches = [match for match in matches if not match.is_playoff]
+
+    match_payload = [
+        {
+            "id": match.id,
+            "game": match.game,
+            "order": match.order_index,
+            "status": match.status,
+            "team1": team_lookup.get(match.team1_id),
+            "team2": team_lookup.get(match.team2_id),
+            "team1_id": match.team1_id,
+            "team2_id": match.team2_id,
+            "score1": match.score_team1,
+            "score2": match.score_team2,
+        }
+        for match in non_playoff_matches
+    ]
+    leaderboard = _build_leaderboard(match_payload, team_lookup, bucket_pool_mode)
 
     grouped_matches: dict[str, list[Match]] = {}
     for match in matches:
@@ -2611,6 +2630,42 @@ def _cast_state(session: Session) -> dict[str, object]:
         for photo in photo_rows
     ]
 
+    semifinalists: list[dict[str, object]] = []
+    semifinal_matches = session.exec(
+        select(Match)
+        .where(
+            (Match.event_id == event.id)
+            & (Match.is_playoff == True)
+            & (Match.playoff_round == "semifinal")
+        )
+        .order_by(Match.order_index)
+    ).all()
+    if semifinal_matches:
+        ordered = sorted(
+            semifinal_matches,
+            key=lambda match: (
+                match.score_team1 is None,
+                match.score_team1 if match.score_team1 is not None else 9999,
+            ),
+        )
+        semifinalists = [
+            {
+                "name": team_lookup.get(match.team1_id, "TBD"),
+                "score": match.score_team1,
+                "status": match.status,
+            }
+            for match in ordered[:8]
+        ]
+    else:
+        semifinalists = [
+            {
+                "name": entry["name"],
+                "score": entry.get("bucket_score"),
+                "status": "pending",
+            }
+            for entry in leaderboard[:8]
+        ]
+
     return {
         "event": {
             "name": event.name,
@@ -2621,6 +2676,7 @@ def _cast_state(session: Session) -> dict[str, object]:
         "generated_at": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
         "photos": photos_payload,
         "games": games_payload,
+        "semifinalists": semifinalists,
     }
 
 

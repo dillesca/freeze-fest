@@ -312,13 +312,13 @@ body {
 
 .cast-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(380px, 1.1fr);
-  gap: clamp(1.5rem, 3vw, 2.5rem);
-  padding: clamp(1.5rem, 3.5vw, 3rem);
+  grid-template-columns: minmax(0, 1fr) minmax(520px, 2fr);
+  gap: clamp(1.25rem, 2.5vw, 2rem);
+  padding: clamp(1.25rem, 3vw, 2.75rem);
   height: 100vh;
   box-sizing: border-box;
   align-items: stretch;
-  max-width: 1500px;
+  max-width: 1520px;
   margin: 0 auto;
 }
 
@@ -377,9 +377,9 @@ body {
 }
 
 .cast-info {
-  display: grid;
-  grid-template-rows: min-content 1fr;
-  gap: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
   height: 100%;
 }
 
@@ -391,6 +391,93 @@ body {
   border-radius: 16px;
   background: rgba(12, 20, 36, 0.7);
   box-shadow: 0 16px 30px rgba(0, 0, 0, 0.28);
+}
+
+.cast-info__summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.cast-semis {
+  background: rgba(15, 24, 44, 0.8);
+  border-radius: 18px;
+  padding: 1rem 1.1rem;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.cast-semis__header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.cast-semis__header h2 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cast-semis__header p {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.65;
+}
+
+.cast-semis__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.cast-semis__item {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.35rem 0.2rem;
+}
+
+.cast-semis__item--qualified {
+  background: rgba(24, 110, 255, 0.08);
+  border-radius: 12px;
+}
+
+.cast-semis__rank {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #7cd5ff;
+  min-width: 2rem;
+  text-align: center;
+}
+
+.cast-semis__body {
+  flex: 1;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0.25rem;
+}
+
+.cast-semis__item:last-child .cast-semis__body {
+  border-bottom: none;
+}
+
+.cast-semis__name {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.cast-semis__meta {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  opacity: 0.7;
 }
 
 .cast-info__logo img {
@@ -485,6 +572,18 @@ body {
 
   .cast-info__header {
     justify-content: flex-start;
+  }
+
+  .cast-info__summary {
+    grid-template-columns: 1fr;
+  }
+
+  .cast-semis {
+    order: 2;
+  }
+
+  .cast-semis__list {
+    grid-template-columns: 1fr;
   }
 }
 

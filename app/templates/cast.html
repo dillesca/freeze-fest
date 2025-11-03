@@ -27,14 +27,40 @@
       </section>
 
       <aside class="cast-info">
-        <header class="cast-info__header">
-          <div class="cast-info__logo">
-            <img src="{{ request.url_for('static', path='img/freezefest.png') }}" alt="Freeze Fest mascot" />
-          </div>
-          <div class="cast-info__titles">
-            <h1>{{ cast_state.event.name }}</h1>
-          </div>
-        </header>
+        <div class="cast-info__summary">
+          <header class="cast-info__header">
+            <div class="cast-info__logo">
+              <img src="{{ request.url_for('static', path='img/freezefest.png') }}" alt="Freeze Fest mascot" />
+            </div>
+            <div class="cast-info__titles">
+              <h1>{{ cast_state.event.name }}</h1>
+            </div>
+          </header>
+
+          {% if cast_state.semifinalists %}
+          <section class="cast-semis" aria-label="Leaderboard">
+            <header class="cast-semis__header">
+              <h2>Leaderboard</h2>
+              <p>Top four in semifinals</p>
+            </header>
+            <ol class="cast-semis__list">
+              {% for team in cast_state.semifinalists %}
+              <li class="cast-semis__item {% if loop.index <= 4 %}cast-semis__item--qualified{% endif %}">
+                <span class="cast-semis__rank">#{{ loop.index }}</span>
+                <div class="cast-semis__body">
+                  <p class="cast-semis__name">{{ team.name }}</p>
+                  {% if team.score is not none %}
+                  <p class="cast-semis__meta">Score: {{ team.score }}</p>
+                  {% else %}
+                  <p class="cast-semis__meta">{{ team.status.replace('_', ' ') if team.status else 'Pending' }}</p>
+                  {% endif %}
+                </div>
+              </li>
+              {% endfor %}
+            </ol>
+          </section>
+          {% endif %}
+        </div>
 
         <section class="cast-games" data-cast-games>
           {% if cast_state.games %}
