@@ -163,7 +163,7 @@
         {% endif %}
       </section>
 
-      {% if is_admin and blocked_rsvps %}
+      {% if is_admin and (blocked_rsvps or pending_rsvp_updates) %}
       <section class="panel panel--warning">
         <h2>RSVPs Awaiting Review</h2>
         <ul class="moderation-list">
@@ -179,6 +179,46 @@
             <form method="post" action="{{ request.url_for('admin_approve_rsvp', rsvp_id=entry.id) }}" class="moderation-approve">
               <input type="hidden" name="next" value="{{ request.url.path }}" />
               <button type="submit" class="btn-secondary">Approve RSVP</button>
+            </form>
+            <form method="post" action="{{ request.url_for('admin_deny_rsvp', rsvp_id=entry.id) }}" class="moderation-approve">
+              <input type="hidden" name="next" value="{{ request.url.path }}" />
+              <button type="submit" class="btn-secondary btn-secondary--danger">Deny RSVP</button>
+            </form>
+          </li>
+          {% endfor %}
+          {% for update in pending_rsvp_updates %}
+          <li class="moderation-list__item">
+            <div>
+              <strong>{{ update.record.name }}</strong>
+              <span class="rsvp-meta">{{ update.record.guests }} attending</span>
+              {% if update.record.message %}
+              <p class="rsvp-note">“{{ update.record.message }}”</p>
+              {% endif %}
+            </div>
+            <div class="moderation-change">
+              <p class="moderation-change__title">Requested Update</p>
+              <ul>
+                {% if update.proposed.name and update.proposed.name != update.record.name %}
+                <li><span>New name:</span> {{ update.proposed.name }}</li>
+                {% endif %}
+                {% if update.proposed.guests is not none and update.proposed.guests != update.record.guests %}
+                <li><span>Guest count:</span> {{ update.proposed.guests }}</li>
+                {% endif %}
+                {% if update.proposed.message and update.proposed.message != update.record.message %}
+                <li><span>New message:</span> “{{ update.proposed.message }}”</li>
+                {% endif %}
+                {% if (not update.proposed.name or update.proposed.name == update.record.name) and (update.proposed.guests is none or update.proposed.guests == update.record.guests) and (not update.proposed.message or update.proposed.message == update.record.message) %}
+                <li>No field changes supplied.</li>
+                {% endif %}
+              </ul>
+            </div>
+            <form method="post" action="{{ request.url_for('admin_approve_rsvp', rsvp_id=update.record.id) }}" class="moderation-approve">
+              <input type="hidden" name="next" value="{{ request.url.path }}" />
+              <button type="submit" class="btn-secondary">Approve Update</button>
+            </form>
+            <form method="post" action="{{ request.url_for('admin_deny_rsvp', rsvp_id=update.record.id) }}" class="moderation-approve">
+              <input type="hidden" name="next" value="{{ request.url.path }}" />
+              <button type="submit" class="btn-secondary btn-secondary--danger">Deny Update</button>
             </form>
           </li>
           {% endfor %}

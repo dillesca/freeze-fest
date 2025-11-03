@@ -332,7 +332,7 @@
         {% endif %}
       </section>
 
-      {% if is_admin and blocked_teams %}
+      {% if is_admin and (blocked_teams or pending_team_updates) %}
       <section class="panel panel--warning">
         <h2>Teams Awaiting Review</h2>
         <ul class="moderation-list">
@@ -348,13 +348,52 @@
               <input type="hidden" name="next" value="{{ request.url.path }}" />
               <button type="submit" class="btn-secondary">Approve Team</button>
             </form>
+            <form method="post" action="{{ request.url_for('admin_deny_team', team_id=team.id) }}" class="moderation-approve">
+              <input type="hidden" name="next" value="{{ request.url.path }}" />
+              <button type="submit" class="btn-secondary btn-secondary--danger">Deny Team</button>
+            </form>
+          </li>
+          {% endfor %}
+          {% for update in pending_team_updates %}
+          <li class="moderation-list__item">
+            <div>
+              <strong>{{ update.record.name }}</strong>
+              {% if update.record.member_one or update.record.member_two %}
+              <p class="rsvp-meta">Current members: {{ update.record.member_one or 'TBD' }} &amp; {{ update.record.member_two or 'TBD' }}</p>
+              {% endif %}
+            </div>
+            <div class="moderation-change">
+              <p class="moderation-change__title">Requested Update</p>
+              <ul>
+                {% if update.proposed.name and update.proposed.name != update.record.name %}
+                <li><span>New name:</span> {{ update.proposed.name }}</li>
+                {% endif %}
+                {% if update.proposed.member_one and update.proposed.member_one != update.record.member_one %}
+                <li><span>Player one:</span> {{ update.proposed.member_one }}</li>
+                {% endif %}
+                {% if update.proposed.member_two and update.proposed.member_two != update.record.member_two %}
+                <li><span>Player two:</span> {{ update.proposed.member_two }}</li>
+                {% endif %}
+                {% if (not update.proposed.name or update.proposed.name == update.record.name) and (not update.proposed.member_one or update.proposed.member_one == update.record.member_one) and (not update.proposed.member_two or update.proposed.member_two == update.record.member_two) %}
+                <li>No roster changes supplied.</li>
+                {% endif %}
+              </ul>
+            </div>
+            <form method="post" action="{{ request.url_for('admin_approve_team', team_id=update.record.id) }}" class="moderation-approve">
+              <input type="hidden" name="next" value="{{ request.url.path }}" />
+              <button type="submit" class="btn-secondary">Approve Update</button>
+            </form>
+            <form method="post" action="{{ request.url_for('admin_deny_team', team_id=update.record.id) }}" class="moderation-approve">
+              <input type="hidden" name="next" value="{{ request.url.path }}" />
+              <button type="submit" class="btn-secondary btn-secondary--danger">Deny Update</button>
+            </form>
           </li>
           {% endfor %}
         </ul>
       </section>
       {% endif %}
 
-      {% if is_admin and blocked_free_agents %}
+      {% if is_admin and (blocked_free_agents or pending_free_agent_updates) %}
       <section class="panel panel--warning">
         <h2>Free Agents Awaiting Review</h2>
         <ul class="moderation-list">
@@ -369,6 +408,50 @@
             <form method="post" action="{{ request.url_for('admin_approve_free_agent', agent_id=agent.id) }}" class="moderation-approve">
               <input type="hidden" name="next" value="{{ request.url.path }}" />
               <button type="submit" class="btn-secondary">Approve Free Agent</button>
+            </form>
+            <form method="post" action="{{ request.url_for('admin_deny_free_agent', agent_id=agent.id) }}" class="moderation-approve">
+              <input type="hidden" name="next" value="{{ request.url.path }}" />
+              <button type="submit" class="btn-secondary btn-secondary--danger">Deny Free Agent</button>
+            </form>
+          </li>
+          {% endfor %}
+          {% for update in pending_free_agent_updates %}
+          {% set proposed_team = update.proposed.team_id %}
+          <li class="moderation-list__item">
+            <div>
+              <strong>{{ update.record.name }}</strong>
+              <p class="rsvp-meta">Current status: {{ update.record.status|capitalize }}</p>
+              {% if update.record.note %}
+              <p class="rsvp-note">“{{ update.record.note }}”</p>
+              {% endif %}
+            </div>
+            <div class="moderation-change">
+              <p class="moderation-change__title">Requested Update</p>
+              <ul>
+                {% if update.proposed.name and update.proposed.name != update.record.name %}
+                <li><span>New name:</span> {{ update.proposed.name }}</li>
+                {% endif %}
+                {% if update.proposed.status and update.proposed.status != update.record.status %}
+                <li><span>Status:</span> {{ update.proposed.status|capitalize }}</li>
+                {% endif %}
+                {% if update.proposed.note and update.proposed.note != update.record.note %}
+                <li><span>New note:</span> “{{ update.proposed.note }}”</li>
+                {% endif %}
+                {% if update.proposed.team_id is not none and update.proposed.team_id != update.record.team_id %}
+                <li><span>Team:</span> {{ team_lookup.get(update.proposed.team_id, '-- No team --') }}</li>
+                {% endif %}
+                {% if (not update.proposed.name or update.proposed.name == update.record.name) and (not update.proposed.status or update.proposed.status == update.record.status) and (not update.proposed.note or update.proposed.note == update.record.note) and (update.proposed.team_id is none or update.proposed.team_id == update.record.team_id) %}
+                <li>No profile changes supplied.</li>
+                {% endif %}
+              </ul>
+            </div>
+            <form method="post" action="{{ request.url_for('admin_approve_free_agent', agent_id=update.record.id) }}" class="moderation-approve">
+              <input type="hidden" name="next" value="{{ request.url.path }}" />
+              <button type="submit" class="btn-secondary">Approve Update</button>
+            </form>
+            <form method="post" action="{{ request.url_for('admin_deny_free_agent', agent_id=update.record.id) }}" class="moderation-approve">
+              <input type="hidden" name="next" value="{{ request.url.path }}" />
+              <button type="submit" class="btn-secondary btn-secondary--danger">Deny Update</button>
             </form>
           </li>
           {% endfor %}

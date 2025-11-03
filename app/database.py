@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import logging
 from datetime import date, datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, Any, Dict
 
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 try:  # Optional conversion support
@@ -163,6 +165,18 @@ class Match(SQLModel, table=True):
     is_playoff: bool = Field(default=False, nullable=False)
     playoff_round: str | None = Field(default=None, max_length=50)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+
+class PendingChange(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("entity_type", "entity_id", name="pending_change_unique"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    entity_type: str = Field(nullable=False, max_length=32, index=True)
+    entity_id: int = Field(nullable=False, index=True)
+    original_data: str = Field(nullable=False)
+    proposed_data: str = Field(nullable=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
 
 
 def init_db() -> None:
@@ -463,3 +477,53 @@ def _ensure_event_winner_photo_column() -> None:
         if "winner_photo" not in existing_columns:
             column_type = "TEXT" if dialect == "sqlite" else "VARCHAR(255)"
             conn.exec_driver_sql(f"ALTER TABLE event ADD COLUMN winner_photo {column_type}")
+
+
+def _serialize_payload(payload: Dict[str, Any]) -> str:
+    return json.dumps(payload, default=str)
+
+
+def upsert_pending_change(
+    session: Session,
+    entity_type: str,
+    entity_id: int,
+    original_data: Dict[str, Any],
+    proposed_data: Dict[str, Any],
+) -> PendingChange:
+    existing = session.exec(
+        select(PendingChange).where(
+            (PendingChange.entity_type == entity_type) & (PendingChange.entity_id == entity_id)
+        )
+    ).first()
+    serialized_original = _serialize_payload(original_data)
+    serialized_proposed = _serialize_payload(proposed_data)
+    now = datetime.utcnow()
+    if existing:
+        existing.proposed_data = serialized_proposed
+        existing.updated_at = now
+        session.add(existing)
+        return existing
+    change = PendingChange(
+        entity_type=entity_type,
+        entity_id=entity_id,
+        original_data=serialized_original,
+        proposed_data=serialized_proposed,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(change)
+    return change
+
+
+def get_pending_change(session: Session, entity_type: str, entity_id: int) -> PendingChange | None:
+    return session.exec(
+        select(PendingChange).where(
+            (PendingChange.entity_type == entity_type) & (PendingChange.entity_id == entity_id)
+        )
+    ).first()
+
+
+def delete_pending_change(session: Session, entity_type: str, entity_id: int) -> None:
+    change = get_pending_change(session, entity_type, entity_id)
+    if change:
+        session.delete(change)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import logging
 import hmac
 import itertools
@@ -22,7 +23,7 @@ from collections import defaultdict
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from sqlmodel import Session, select, func
+from sqlmodel import Session, SQLModel, select, func
 from email.message import EmailMessage
 
 try:  # Optional – used for HEIC conversion
@@ -45,6 +46,10 @@ from .database import (
     UPLOAD_DIR,
     get_active_event,
     get_session,
+    delete_pending_change,
+    get_pending_change,
+    upsert_pending_change,
+    PendingChange,
 )
 from .storage import (
     extract_object_name,
@@ -212,6 +217,44 @@ def _sanitize_next(next_param: str | None) -> str:
 
 def _absolute_next(request: Request, next_param: str) -> str:
     return urljoin(str(request.base_url), next_param.lstrip("/"))
+
+
+def _team_display_name(session: Session, team_identifier: int | None) -> str:
+    if not team_identifier:
+        return "-- No team --"
+    team = session.get(Team, team_identifier)
+    return team.name if team else f"Team #{team_identifier}"
+
+
+def _pending_updates(
+    session: Session,
+    entity_type: str,
+    model_cls: type[SQLModel],
+) -> list[dict[str, object]]:
+    changes = session.exec(
+        select(PendingChange)
+        .where(PendingChange.entity_type == entity_type)
+        .order_by(PendingChange.created_at.desc())
+    ).all()
+    if not changes:
+        return []
+    ids = {change.entity_id for change in changes}
+    records = session.exec(select(model_cls).where(model_cls.id.in_(ids))).all()
+    record_lookup = {record.id: record for record in records}
+    payload: list[dict[str, object]] = []
+    for change in changes:
+        record = record_lookup.get(change.entity_id)
+        if not record:
+            continue
+        payload.append(
+            {
+                "record": record,
+                "proposed": json.loads(change.proposed_data),
+                "original": json.loads(change.original_data),
+                "submitted_at": change.updated_at,
+            }
+        )
+    return payload
 
 
 def _render(
@@ -618,6 +661,7 @@ async def update_rsvp(
     original_name = rsvp.name
     original_guests = rsvp.guests
     original_message = rsvp.message
+    original_status = rsvp.status
 
     trimmed_name = name.strip()
     cleaned_message = message.strip() if message else None
@@ -649,10 +693,31 @@ async def update_rsvp(
 
     flagged_update = needs_review(trimmed_name, updated_message or "")
     if flagged_update:
-        rsvp.status = MODERATION_BLOCKED
+        upsert_pending_change(
+            session,
+            "rsvp",
+            rsvp.id,
+            {
+                "name": original_name,
+                "guests": original_guests,
+                "message": original_message,
+                "status": original_status,
+            },
+            {
+                "name": trimmed_name,
+                "guests": guests,
+                "message": updated_message,
+                "status": MODERATION_APPROVED,
+            },
+        )
+        rsvp.name = original_name
+        rsvp.guests = original_guests
+        rsvp.message = original_message
+        rsvp.status = original_status
         redirect_state = "pending"
     else:
         rsvp.status = MODERATION_APPROVED
+        delete_pending_change(session, "rsvp", rsvp.id)
         redirect_state = "updated"
 
     session.add(rsvp)
@@ -688,6 +753,7 @@ async def delete_rsvp(request: Request, rsvp_id: int, session: Session = Depends
     rsvp = session.get(RSVP, rsvp_id)
     if not rsvp:
         raise HTTPException(status_code=404, detail="RSVP not found")
+    delete_pending_change(session, "rsvp", rsvp_id)
     session.delete(rsvp)
     session.commit()
     notify_admin("RSVP deleted", f"Name: {rsvp.name}\\nGuests: {rsvp.guests}")
@@ -708,10 +774,62 @@ async def admin_approve_rsvp(
     rsvp = session.get(RSVP, rsvp_id)
     if not rsvp:
         raise HTTPException(status_code=404, detail="RSVP not found")
+    change = get_pending_change(session, "rsvp", rsvp_id)
+    if change:
+        proposed = json.loads(change.proposed_data)
+        rsvp.name = proposed.get("name", rsvp.name)
+        rsvp.guests = proposed.get("guests", rsvp.guests)
+        rsvp.message = proposed.get("message", rsvp.message)
+        delete_pending_change(session, "rsvp", rsvp_id)
+        note = "Approved pending update"
+    else:
+        note = "Approved submission"
     rsvp.status = MODERATION_APPROVED
     session.add(rsvp)
     session.commit()
-    notify_admin("RSVP approved", f"Name: {rsvp.name}\\nGuests: {rsvp.guests}")
+    notify_admin(
+        "RSVP approved",
+        f"{note}:\\nName: {rsvp.name}\\nGuests: {rsvp.guests}\\nMessage: {rsvp.message or '-'}",
+    )
+    target = next or request.url_for("index")
+    return RedirectResponse(str(target), status_code=303)
+
+
+@router.post("/admin/rsvp/{rsvp_id}/deny", response_class=HTMLResponse, name="admin_deny_rsvp")
+async def admin_deny_rsvp(
+    request: Request,
+    rsvp_id: int,
+    session: Session = Depends(get_session),
+    next: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
+):
+    if not _is_admin(request):
+        return _admin_redirect(request)
+    rsvp = session.get(RSVP, rsvp_id)
+    if not rsvp:
+        raise HTTPException(status_code=404, detail="RSVP not found")
+    change = get_pending_change(session, "rsvp", rsvp_id)
+    if change:
+        original = json.loads(change.original_data)
+        proposed = json.loads(change.proposed_data)
+        rsvp.name = original.get("name", rsvp.name)
+        rsvp.guests = original.get("guests", rsvp.guests)
+        rsvp.message = original.get("message", rsvp.message)
+        rsvp.status = original.get("status", MODERATION_APPROVED)
+        delete_pending_change(session, "rsvp", rsvp_id)
+        session.add(rsvp)
+        session.commit()
+        notify_admin(
+            "RSVP update denied",
+            (
+                "Reverted RSVP to original details.\n"
+                f"Original: {original.get('name', '-')}, guests {original.get('guests', '-')}, message {original.get('message') or '-'}\n"
+                f"Rejected changes: {proposed.get('name', '-')}, guests {proposed.get('guests', '-')}, message {proposed.get('message') or '-'}"
+            ),
+        )
+    else:
+        session.delete(rsvp)
+        session.commit()
+        notify_admin("RSVP denied", f"Removed pending RSVP: {rsvp.name}")
     target = next or request.url_for("index")
     return RedirectResponse(str(target), status_code=303)
 
@@ -987,17 +1105,40 @@ async def update_team(
         redirect_url = str(request.url_for("team_directory")) + "?team=exists"
         return RedirectResponse(redirect_url, status_code=303)
 
-    team.name = cleaned
-    team.member_one = first_player
-    team.member_two = second_player
-    session.add(team)
     flagged = needs_review(cleaned, first_player or "", second_player or "")
+    proposed_payload = {
+        "name": cleaned,
+        "member_one": first_player,
+        "member_two": second_player,
+        "status": MODERATION_APPROVED,
+    }
     if flagged:
-        team.status = MODERATION_BLOCKED
+        upsert_pending_change(
+            session,
+            "team",
+            team.id,
+            {
+                "name": original_name,
+                "member_one": original_member_one,
+                "member_two": original_member_two,
+                "status": original_status,
+            },
+            proposed_payload,
+        )
+        team.name = original_name
+        team.member_one = original_member_one
+        team.member_two = original_member_two
+        team.status = original_status
+        session.add(team)
         session.commit()
         redirect_state = "pending"
     else:
+        team.name = proposed_payload["name"]
+        team.member_one = proposed_payload["member_one"]
+        team.member_two = proposed_payload["member_two"]
         team.status = MODERATION_APPROVED
+        delete_pending_change(session, "team", team.id)
+        session.add(team)
         session.commit()
         _clear_event_matches(session, team.event_id)
         session.commit()
@@ -1012,9 +1153,9 @@ async def update_team(
                 f"  Members: {(original_member_one or 'TBD')} & {(original_member_two or 'TBD')}\n"
                 f"  Status: {original_status}\n\n"
                 "Requested changes:\n"
-                f"  Team: {team.name}\n"
-                f"  Members: {(team.member_one or 'TBD')} & {(team.member_two or 'TBD')}\n"
-                f"  Status: {team.status}"
+                f"  Team: {proposed_payload['name']}\n"
+                f"  Members: {(proposed_payload['member_one'] or 'TBD')} & {(proposed_payload['member_two'] or 'TBD')}\n"
+                f"  Status: {proposed_payload['status']}"
             ),
         )
     else:
@@ -1040,6 +1181,7 @@ async def delete_team(request: Request, team_id: int, session: Session = Depends
         agent.status = "pending"
         session.add(agent)
 
+    delete_pending_change(session, "team", team_id)
     _clear_event_matches(session, event_id)
     session.delete(team)
     session.commit()
@@ -1061,12 +1203,63 @@ async def admin_approve_team(
     team = session.get(Team, team_id)
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
+    change = get_pending_change(session, "team", team_id)
+    if change:
+        proposed = json.loads(change.proposed_data)
+        team.name = proposed.get("name", team.name)
+        team.member_one = proposed.get("member_one", team.member_one)
+        team.member_two = proposed.get("member_two", team.member_two)
+        delete_pending_change(session, "team", team_id)
+        note = "Approved pending update"
+    else:
+        note = "Approved submission"
     team.status = MODERATION_APPROVED
     session.add(team)
     session.commit()
     _clear_event_matches(session, team.event_id)
     session.commit()
-    notify_admin("Team approved", f"Team: {team.name}")
+    notify_admin("Team approved", f"{note}: {team.name}")
+    target = next or request.url_for("team_directory")
+    return RedirectResponse(str(target), status_code=303)
+
+
+@router.post("/admin/team/{team_id}/deny", response_class=HTMLResponse, name="admin_deny_team")
+async def admin_deny_team(
+    request: Request,
+    team_id: int,
+    session: Session = Depends(get_session),
+    next: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
+):
+    if not _is_admin(request):
+        return _admin_redirect(request)
+    team = session.get(Team, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    change = get_pending_change(session, "team", team_id)
+    if change:
+        original = json.loads(change.original_data)
+        proposed = json.loads(change.proposed_data)
+        team.name = original.get("name", team.name)
+        team.member_one = original.get("member_one", team.member_one)
+        team.member_two = original.get("member_two", team.member_two)
+        team.status = original.get("status", MODERATION_APPROVED)
+        delete_pending_change(session, "team", team_id)
+        session.add(team)
+        session.commit()
+        notify_admin(
+            "Team update denied",
+            (
+                "Reverted team to original details.\n"
+                f"Original name: {original.get('name', '-')}\n"
+                f"Original members: {(original.get('member_one') or 'TBD')} & {(original.get('member_two') or 'TBD')}\n"
+                f"Rejected name: {proposed.get('name', '-')}\n"
+                f"Rejected members: {(proposed.get('member_one') or 'TBD')} & {(proposed.get('member_two') or 'TBD')}"
+            ),
+        )
+    else:
+        session.delete(team)
+        session.commit()
+        notify_admin("Team denied", f"Removed pending team: {team.name}")
     target = next or request.url_for("team_directory")
     return RedirectResponse(str(target), status_code=303)
 
@@ -1174,12 +1367,6 @@ async def update_free_agent(
     if not agent:
         raise HTTPException(status_code=404, detail="Free agent not found")
 
-    def _team_label(team_identifier: int | None) -> str:
-        if not team_identifier:
-            return "-- No team --"
-        team_obj = session.get(Team, team_identifier)
-        return team_obj.name if team_obj else f"Team #{team_identifier}"
-
     original_name = agent.name
     original_note = agent.note
     original_status = agent.status
@@ -1200,10 +1387,6 @@ async def update_free_agent(
         status_value = "pending"
     requested_status = status_value
 
-    agent.name = trimmed_name
-    agent.note = cleaned_note
-    agent.status = status_value
-
     requested_team_id: int | None = None
     requested_team_name: str | None = None
     if team_id:
@@ -1217,15 +1400,39 @@ async def update_free_agent(
                 requested_team_id = candidate_team.id
                 requested_team_name = candidate_team.name
 
-    flagged = needs_review(trimmed_name, agent.email or "", agent.note or "")
-    agent.moderation_status = MODERATION_BLOCKED if flagged else MODERATION_APPROVED
+    flagged = needs_review(trimmed_name, agent.email or "", cleaned_note or "")
+    moderation_status = MODERATION_BLOCKED if flagged else MODERATION_APPROVED
 
-    if agent.moderation_status != MODERATION_APPROVED:
-        agent.team_id = None
-        agent.status = "pending"
+    proposed_payload = {
+        "name": trimmed_name,
+        "note": cleaned_note,
+        "status": requested_status,
+        "team_id": requested_team_id,
+        "moderation_status": MODERATION_APPROVED,
+    }
+
+    if flagged:
+        upsert_pending_change(
+            session,
+            "freeagent",
+            agent.id,
+            {
+                "name": original_name,
+                "note": original_note,
+                "status": original_status,
+                "team_id": original_team_id,
+                "moderation_status": original_moderation,
+            },
+            proposed_payload,
+        )
+        agent.name = original_name
+        agent.note = original_note
+        agent.status = original_status
+        agent.team_id = original_team_id
+        agent.moderation_status = original_moderation
         session.add(agent)
         session.commit()
-        original_team_label = _team_label(original_team_id)
+        original_team_label = _team_display_name(session, original_team_id)
         requested_team_label = requested_team_name or "-- No team --"
         notify_admin(
             "Free agent update pending",
@@ -1238,17 +1445,22 @@ async def update_free_agent(
                 f"  Team: {original_team_label}\n"
                 f"  Moderation: {original_moderation}\n\n"
                 "Requested changes:\n"
-                f"  Name: {trimmed_name}\n"
+                f"  Name: {proposed_payload['name']}\n"
                 f"  Email: {agent.email or '-'}\n"
-                f"  Status: {requested_status}\n"
-                f"  Note: {(cleaned_note or '-')}\n"
+                f"  Status: {proposed_payload['status']}\n"
+                f"  Note: {(proposed_payload['note'] or '-')}\n"
                 f"  Team: {requested_team_label}\n"
-                f"  Moderation: {agent.moderation_status}\n"
-                f"  Stored status while pending: {agent.status}"
+                f"  Moderation: {proposed_payload['moderation_status']}"
             ),
         )
         redirect_url = str(request.url_for("team_directory")) + "?free_agent=pending"
         return RedirectResponse(redirect_url, status_code=303)
+    else:
+        agent.name = proposed_payload["name"]
+        agent.note = proposed_payload["note"]
+        agent.status = requested_status
+        agent.team_id = requested_team_id
+        agent.moderation_status = moderation_status
 
     # Optional: pair with another free agent to create a new team
     if pair_with:
@@ -1284,9 +1496,9 @@ async def update_free_agent(
             session.commit()
 
             redirect_url = str(request.url_for("team_directory")) + "?free_agent=paired"
-            return RedirectResponse(redirect_url, status_code=303)
+        return RedirectResponse(redirect_url, status_code=303)
 
-    if requested_team_id is None or status_value == "pending":
+    if requested_team_id is None or requested_status == "pending":
         agent.team_id = None
         agent.status = "pending"
     else:
@@ -1294,6 +1506,7 @@ async def update_free_agent(
         agent.status = "paired"
 
     session.add(agent)
+    delete_pending_change(session, "freeagent", agent.id)
     session.commit()
 
     notify_admin(
@@ -1310,6 +1523,7 @@ async def delete_free_agent(request: Request, agent_id: int, session: Session = 
     agent = session.get(FreeAgent, agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Free agent not found")
+    delete_pending_change(session, "freeagent", agent_id)
     session.delete(agent)
     session.commit()
     notify_admin("Free agent deleted", f"Name: {agent.name}\nEmail: {agent.email or '-'}")
@@ -1334,13 +1548,72 @@ async def admin_approve_free_agent(
     agent = session.get(FreeAgent, agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Free agent not found")
+    change = get_pending_change(session, "freeagent", agent_id)
+    if change:
+        proposed = json.loads(change.proposed_data)
+        agent.name = proposed.get("name", agent.name)
+        agent.note = proposed.get("note", agent.note)
+        agent.status = proposed.get("status", agent.status)
+        agent.team_id = proposed.get("team_id", agent.team_id)
+        delete_pending_change(session, "freeagent", agent_id)
+        note = "Approved pending update"
+    else:
+        note = "Approved submission"
     agent.moderation_status = MODERATION_APPROVED
     session.add(agent)
     session.commit()
     notify_admin(
         "Free agent approved",
-        f"Name: {agent.name}\nEmail: {agent.email or '-'}\nStatus: {agent.status}",
+        f"{note}: {agent.name}\nEmail: {agent.email or '-'}\nStatus: {agent.status}",
     )
+    target = next or request.url_for("team_directory")
+    return RedirectResponse(str(target), status_code=303)
+
+
+@router.post(
+    "/admin/free-agent/{agent_id}/deny",
+    response_class=HTMLResponse,
+    name="admin_deny_free_agent",
+)
+async def admin_deny_free_agent(
+    request: Request,
+    agent_id: int,
+    session: Session = Depends(get_session),
+    next: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
+):
+    if not _is_admin(request):
+        return _admin_redirect(request)
+    agent = session.get(FreeAgent, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Free agent not found")
+    change = get_pending_change(session, "freeagent", agent_id)
+    if change:
+        original = json.loads(change.original_data)
+        proposed = json.loads(change.proposed_data)
+        agent.name = original.get("name", agent.name)
+        agent.note = original.get("note", agent.note)
+        agent.status = original.get("status", agent.status)
+        agent.team_id = original.get("team_id", agent.team_id)
+        agent.moderation_status = original.get("moderation_status", MODERATION_APPROVED)
+        delete_pending_change(session, "freeagent", agent_id)
+        session.add(agent)
+        session.commit()
+        notify_admin(
+            "Free agent update denied",
+            (
+                "Reverted free agent to original details.\n"
+                f"Original name: {original.get('name', '-')}\n"
+                f"Original status: {original.get('status', '-')}\n"
+                f"Original team: {_team_display_name(session, original.get('team_id'))}\n"
+                f"Rejected name: {proposed.get('name', '-')}\n"
+                f"Rejected status: {proposed.get('status', '-')}\n"
+                f"Rejected team: {_team_display_name(session, proposed.get('team_id'))}"
+            ),
+        )
+    else:
+        session.delete(agent)
+        session.commit()
+        notify_admin("Free agent denied", f"Removed pending free agent: {agent.name}")
     target = next or request.url_for("team_directory")
     return RedirectResponse(str(target), status_code=303)
 
@@ -1394,6 +1667,7 @@ def _home_context(
         "rsvp_error": rsvp_error,
         "rsvp_status": rsvp_status,
         "blocked_rsvps": _fetch_rsvps(session, event.id, status=MODERATION_BLOCKED) if include_blocked else [],
+        "pending_rsvp_updates": _pending_updates(session, "rsvp", RSVP) if include_blocked else [],
     }
 
 
@@ -2226,6 +2500,8 @@ def _team_context(
 
     blocked_teams: list[Team] = []
     blocked_pending_agents: list[FreeAgent] = []
+    pending_team_updates: list[dict[str, object]] = []
+    pending_free_agent_updates: list[dict[str, object]] = []
     if is_admin:
         blocked_teams = session.exec(
             select(Team)
@@ -2241,6 +2517,8 @@ def _team_context(
             )
             .order_by(FreeAgent.created_at.desc())
         ).all()
+        pending_team_updates = _pending_updates(session, "team", Team)
+        pending_free_agent_updates = _pending_updates(session, "freeagent", FreeAgent)
 
     return {
         "event": event,
@@ -2255,6 +2533,8 @@ def _team_context(
         "team_lookup": team_lookup,
         "blocked_teams": blocked_teams,
         "blocked_free_agents": blocked_pending_agents,
+        "pending_team_updates": pending_team_updates,
+        "pending_free_agent_updates": pending_free_agent_updates,
     }
 
 
