@@ -24,15 +24,6 @@
           </div>
           {% endif %}
         </div>
-        <div class="cast-photo__meta">
-          <span class="cast-photo__caption" data-photo-caption>
-            {% if cast_state.photos %}
-            {{ cast_state.photos[0].original_name }}
-            {% else %}
-            Gallery will update automatically when new photos arrive.
-            {% endif %}
-          </span>
-        </div>
       </section>
 
       <aside class="cast-info">
@@ -42,13 +33,6 @@
           </div>
           <div class="cast-info__titles">
             <h1>{{ cast_state.event.name }}</h1>
-            {% if cast_state.event.location %}
-            <p class="cast-info__location">{{ cast_state.event.location }}</p>
-            {% endif %}
-            <p class="cast-info__updated">
-              Last updated
-              <span data-last-updated>{{ cast_state.generated_at }}</span>
-            </p>
           </div>
         </header>
 

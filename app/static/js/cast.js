@@ -4,11 +4,13 @@
 
   const initialState = window.CAST_STATE || { event: {}, photos: [], games: [], generated_at: null };
 
+  const layoutEl = document.querySelector(".cast-layout");
   const frameEl = document.querySelector(".cast-photo__frame");
   let photoEl = document.querySelector("[data-cast-photo]");
   let placeholderEl = document.querySelector("[data-cast-photo-placeholder]");
   const captionEl = document.querySelector("[data-photo-caption]");
   const gamesContainer = document.querySelector("[data-cast-games]");
+  const headerEl = document.querySelector(".cast-info__header");
   const updatedEl = document.querySelector("[data-last-updated]");
 
   let photos = Array.isArray(initialState.photos) ? initialState.photos.slice() : [];
@@ -122,6 +124,30 @@
     startSlideshow();
   };
 
+  const syncLayoutHeights = () => {
+    if (!layoutEl || !frameEl) {
+      return;
+    }
+    const layoutStyles = window.getComputedStyle(layoutEl);
+    const paddingTop = parseFloat(layoutStyles.paddingTop) || 0;
+    const paddingBottom = parseFloat(layoutStyles.paddingBottom) || 0;
+    const availableHeight = Math.max(360, window.innerHeight - paddingTop - paddingBottom);
+
+    const headerHeight = headerEl?.offsetHeight || 0;
+    const gamesHeight = gamesContainer?.scrollHeight || 0;
+    const cardsHeight = Math.max(0, headerHeight + gamesHeight);
+
+    const photoMaxHeight = cardsHeight ? Math.min(cardsHeight, availableHeight) : availableHeight;
+    frameEl.style.maxHeight = `${photoMaxHeight}px`;
+    frameEl.style.height = `${photoMaxHeight}px`;
+
+    if (gamesContainer) {
+      const gamesAvailable = Math.max(200, availableHeight - headerHeight);
+      gamesContainer.style.maxHeight = `${gamesAvailable}px`;
+      gamesContainer.style.height = `${Math.min(gamesHeight || gamesAvailable, gamesAvailable)}px`;
+    }
+  };
+
   const renderGames = (games) => {
     if (!gamesContainer) {
       return;
@@ -196,6 +222,8 @@
 
       gamesContainer.appendChild(card);
     });
+
+    syncLayoutHeights();
   };
 
   const updateTimestamp = (isoString) => {
@@ -221,6 +249,7 @@
     syncPhotos(nextState.photos || []);
     renderGames(nextState.games || []);
     updateTimestamp(nextState.generated_at);
+    syncLayoutHeights();
   };
 
   const schedulePoll = () => {
@@ -252,4 +281,6 @@
   // Initial render
   applyState(initialState);
   schedulePoll();
+  window.addEventListener("resize", syncLayoutHeights);
+  syncLayoutHeights();
 })();
