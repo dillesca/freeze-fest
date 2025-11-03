@@ -65,6 +65,7 @@
             value="{{ form_value }}"
             required
             minlength="2"
+            maxlength="100"
           />
 
           <label for="team-member-one">Player one</label>
@@ -74,6 +75,7 @@
             type="text"
             placeholder="Player one (e.g., Taylor Frost)"
             value="{{ form_member_one }}"
+            maxlength="100"
           />
 
           <label for="team-member-two">Player two</label>
@@ -83,6 +85,7 @@
             type="text"
             placeholder="Player two (e.g., Devon Snow)"
             value="{{ form_member_two }}"
+            maxlength="100"
           />
 
           <p class="form-hint">Player names are optional but help fans follow the action.</p>
@@ -109,10 +112,10 @@
         </p>
         <form method="post" action="{{ request.url_for('register_free_agent') }}" class="participants-form team-form">
           <label for="free-agent-name">Full name</label>
-          <input id="free-agent-name" name="name" type="text" required placeholder="Taylor Frost" />
+          <input id="free-agent-name" name="name" type="text" required maxlength="100" placeholder="Taylor Frost" />
 
           <label for="free-agent-note">Notes (optional)</label>
-          <textarea id="free-agent-note" name="note" rows="2" placeholder="Preferred game or fun fact"></textarea>
+          <textarea id="free-agent-note" name="note" rows="2" maxlength="100" placeholder="Preferred game or fun fact"></textarea>
 
           <button type="submit">Join Free Agent Pool</button>
         </form>
@@ -131,7 +134,7 @@
           <li class="free-agent-list__item">
             <div class="free-agent-card">
               <span class="free-agent-name">{{ agent.name }}</span>
-              <span class="free-agent-meta">Joined {{ agent.created_at.strftime('%b %d, %I:%M %p') }}</span>
+              <span class="free-agent-meta">Joined the pool</span>
               {% if agent.note %}
               <p class="free-agent-note">“{{ agent.note }}”</p>
               {% endif %}
@@ -140,10 +143,10 @@
               <summary>Manage {{ agent.name }}</summary>
               <form method="post" action="{{ request.url_for('update_free_agent', agent_id=agent.id) }}" class="inline-form">
                 <label for="agent-name-{{ agent.id }}">Full name</label>
-                <input id="agent-name-{{ agent.id }}" name="name" type="text" value="{{ agent.name }}" required minlength="1" />
+                <input id="agent-name-{{ agent.id }}" name="name" type="text" value="{{ agent.name }}" required minlength="1" maxlength="100" />
 
                 <label for="agent-note-{{ agent.id }}">Notes</label>
-                <textarea id="agent-note-{{ agent.id }}" name="note" rows="2">{{ agent.note or '' }}</textarea>
+                <textarea id="agent-note-{{ agent.id }}" name="note" rows="2" maxlength="100">{{ agent.note or '' }}</textarea>
 
                 <label for="agent-status-{{ agent.id }}">Status</label>
                 <select id="agent-status-{{ agent.id }}" name="status">
@@ -205,10 +208,10 @@
               <summary>Manage {{ agent.name }}</summary>
               <form method="post" action="{{ request.url_for('update_free_agent', agent_id=agent.id) }}" class="inline-form">
                 <label for="agent-name-{{ agent.id }}">Full name</label>
-                <input id="agent-name-{{ agent.id }}" name="name" type="text" value="{{ agent.name }}" required minlength="1" />
+                <input id="agent-name-{{ agent.id }}" name="name" type="text" value="{{ agent.name }}" required minlength="1" maxlength="100" />
 
                 <label for="agent-note-{{ agent.id }}">Notes</label>
-                <textarea id="agent-note-{{ agent.id }}" name="note" rows="2">{{ agent.note or '' }}</textarea>
+                <textarea id="agent-note-{{ agent.id }}" name="note" rows="2" maxlength="100">{{ agent.note or '' }}</textarea>
 
                 <label for="agent-status-{{ agent.id }}">Status</label>
                 <select id="agent-status-{{ agent.id }}" name="status">
@@ -229,7 +232,9 @@
                 <select id="agent-pair-{{ agent.id }}" name="pair_with">
                   <option value="">-- Don't create new team --</option>
                   {% for other in free_agents_pending %}
+                  {% if other.id != agent.id %}
                   <option value="{{ other.id }}">{{ other.name }}</option>
+                  {% endif %}
                   {% endfor %}
                 </select>
                 <p class="form-hint">Choose a pending free agent to regroup this player.</p>
@@ -264,7 +269,7 @@
           <li class="team-list__item">
             <div class="team-list__header">
               <span class="team-list__name">{{ team.name }}</span>
-              <span class="team-list__meta">Added {{ team.created_at.strftime('%b %d, %Y %I:%M %p') }}</span>
+              <span class="team-list__meta">Added to the roster</span>
             </div>
             {% if team.member_one or team.member_two %}
             <p class="team-list__members">
@@ -276,7 +281,15 @@
               <summary>Manage {{ team.name }}</summary>
               <form method="post" action="{{ request.url_for('update_team', team_id=team.id) }}" class="inline-form">
                 <label for="team-edit-name-{{ team.id }}">Team name</label>
-                <input id="team-edit-name-{{ team.id }}" name="name" type="text" value="{{ team.name }}" minlength="2" required />
+                <input
+                  id="team-edit-name-{{ team.id }}"
+                  name="name"
+                  type="text"
+                  value="{{ team.name }}"
+                  minlength="2"
+                  maxlength="100"
+                  required
+                />
 
                 <label for="team-edit-member-one-{{ team.id }}">Player one</label>
                 <input
@@ -284,6 +297,7 @@
                   name="member_one"
                   type="text"
                   value="{{ team.member_one or '' }}"
+                  maxlength="100"
                 />
 
                 <label for="team-edit-member-two-{{ team.id }}">Player two</label>
@@ -292,6 +306,7 @@
                   name="member_two"
                   type="text"
                   value="{{ team.member_two or '' }}"
+                  maxlength="100"
                 />
 
                 <div class="inline-actions">
@@ -316,6 +331,50 @@
         </p>
         {% endif %}
       </section>
+
+      {% if is_admin and blocked_teams %}
+      <section class="panel panel--warning">
+        <h2>Teams Awaiting Review</h2>
+        <ul class="moderation-list">
+          {% for team in blocked_teams %}
+          <li class="moderation-list__item">
+            <div>
+              <strong>{{ team.name }}</strong>
+              {% if team.member_one or team.member_two %}
+              <p class="rsvp-meta">Members: {{ team.member_one or 'TBD' }} &amp; {{ team.member_two or 'TBD' }}</p>
+              {% endif %}
+            </div>
+            <form method="post" action="{{ request.url_for('admin_approve_team', team_id=team.id) }}" class="moderation-approve">
+              <input type="hidden" name="next" value="{{ request.url.path }}" />
+              <button type="submit" class="btn-secondary">Approve Team</button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
+
+      {% if is_admin and blocked_free_agents %}
+      <section class="panel panel--warning">
+        <h2>Free Agents Awaiting Review</h2>
+        <ul class="moderation-list">
+          {% for agent in blocked_free_agents %}
+          <li class="moderation-list__item">
+            <div>
+              <strong>{{ agent.name }}</strong>
+              {% if agent.note %}
+              <p class="rsvp-note">“{{ agent.note }}”</p>
+              {% endif %}
+            </div>
+            <form method="post" action="{{ request.url_for('admin_approve_free_agent', agent_id=agent.id) }}" class="moderation-approve">
+              <input type="hidden" name="next" value="{{ request.url.path }}" />
+              <button type="submit" class="btn-secondary">Approve Free Agent</button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
     </main>
 
     <footer class="page-footer">

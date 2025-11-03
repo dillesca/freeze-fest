@@ -81,6 +81,7 @@ When running under Docker, the compose file mounts `${LOCAL_PHOTO_IMPORT_DIR}` i
 - `docker compose up -d postgres` starts the DB only; `docker compose up --build` runs API + DB together.
 - Override `DATABASE_URL` per environment using `.env` or deployment-time configuration (e.g., Cloud Run secrets or env vars).
 - Set `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_SESSION_SECRET` in your environment to protect tournament controls locally.
+- Optional: configure `ADMIN_EMAIL` and the `SMTP_*` variables to receive email alerts when RSVPs, teams, or free agents need moderation.
 
 ## Project structure
 

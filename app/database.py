@@ -111,11 +111,12 @@ class Event(SQLModel, table=True):
 
 class Team(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    name: str = Field(index=True, min_length=2, max_length=128, nullable=False, unique=True)
+    name: str = Field(index=True, min_length=2, max_length=100, nullable=False)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     event_id: int = Field(foreign_key="event.id", nullable=False, index=True)
-    member_one: str | None = Field(default=None, max_length=128)
-    member_two: str | None = Field(default=None, max_length=128)
+    member_one: str | None = Field(default=None, max_length=100)
+    member_two: str | None = Field(default=None, max_length=100)
+    status: str = Field(default="approved", nullable=False, max_length=32)
 
 
 class Photo(SQLModel, table=True):
@@ -128,23 +129,25 @@ class Photo(SQLModel, table=True):
 
 class RSVP(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    name: str = Field(nullable=False, max_length=120)
-    email: str = Field(nullable=False, max_length=255)
+    name: str = Field(nullable=False, max_length=100)
+    email: str = Field(nullable=False, max_length=100)
     guests: int = Field(default=1, nullable=False)
     message: str | None = Field(default=None)
     event_id: int = Field(foreign_key="event.id", nullable=False, index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    status: str = Field(default="approved", nullable=False, max_length=32)
 
 
 class FreeAgent(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    name: str = Field(nullable=False, max_length=120)
-    email: str = Field(nullable=False, max_length=255)
+    name: str = Field(nullable=False, max_length=100)
+    email: str = Field(nullable=False, max_length=100)
     note: str | None = Field(default=None)
     status: str = Field(default="pending", nullable=False)
     event_id: int = Field(foreign_key="event.id", nullable=False, index=True)
     team_id: int | None = Field(default=None, foreign_key="team.id")
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    moderation_status: str = Field(default="approved", nullable=False, max_length=32)
 
 
 class Match(SQLModel, table=True):
@@ -166,6 +169,9 @@ def init_db() -> None:
     """Create tables if they don't already exist."""
     SQLModel.metadata.create_all(engine)
     _ensure_team_member_columns()
+    _ensure_moderation_columns()
+    _ensure_team_name_index()
+    _ensure_text_length_constraints()
     _ensure_playoff_columns()
     _ensure_event_winner_photo_column()
     _ensure_upload_dir()
@@ -330,6 +336,89 @@ def _ensure_team_member_columns() -> None:
 
         for stmt in statements:
             conn.exec_driver_sql(stmt)
+
+
+def _ensure_moderation_columns() -> None:
+    with engine.begin() as conn:
+        dialect = conn.dialect.name
+
+        def existing_columns(table: str) -> set[str]:
+            if dialect == "sqlite":
+                rows = conn.exec_driver_sql(f"PRAGMA table_info('{table}')")
+                return {row[1] for row in rows}
+            rows = conn.exec_driver_sql(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name=%s AND table_schema = current_schema()",
+                (table,),
+            )
+            return {row[0] for row in rows}
+
+        team_columns = existing_columns("team")
+        if "status" not in team_columns:
+            conn.exec_driver_sql("ALTER TABLE team ADD COLUMN status VARCHAR(32) DEFAULT 'approved' NOT NULL")
+
+        rsvp_columns = existing_columns("rsvp")
+        if "status" not in rsvp_columns:
+            conn.exec_driver_sql("ALTER TABLE rsvp ADD COLUMN status VARCHAR(32) DEFAULT 'approved' NOT NULL")
+
+        free_agent_columns = existing_columns("freeagent")
+        if "moderation_status" not in free_agent_columns:
+            conn.exec_driver_sql(
+                "ALTER TABLE freeagent ADD COLUMN moderation_status VARCHAR(32) DEFAULT 'approved' NOT NULL"
+            )
+
+
+def _ensure_team_name_index() -> None:
+    with engine.begin() as conn:
+        dialect = conn.dialect.name
+
+        if dialect == "sqlite":
+            indexes = conn.exec_driver_sql("PRAGMA index_list('team')")
+            existing = {row[1] for row in indexes}
+            if "ix_team_name" in existing:
+                conn.exec_driver_sql("DROP INDEX IF EXISTS ix_team_name")
+            if "team_event_name_unique" not in existing:
+                conn.exec_driver_sql(
+                    "CREATE UNIQUE INDEX team_event_name_unique ON team (event_id, name)"
+                )
+        else:
+            constraint_rows = conn.exec_driver_sql(
+                "SELECT conname FROM pg_constraint WHERE conrelid = 'team'::regclass AND contype = 'u'"
+            )
+            existing_constraints = {row[0] for row in constraint_rows}
+
+            index_rows = conn.exec_driver_sql(
+                "SELECT indexname FROM pg_indexes WHERE schemaname = current_schema() AND tablename = 'team'"
+            )
+            existing_indexes = {row[0] for row in index_rows}
+
+            if "team_name_key" in existing_constraints:
+                conn.exec_driver_sql("ALTER TABLE team DROP CONSTRAINT team_name_key")
+            if "team_event_name_unique" not in existing_constraints and "team_event_name_unique" not in existing_indexes:
+                conn.exec_driver_sql(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS team_event_name_unique ON team (event_id, name)"
+                )
+
+
+def _ensure_text_length_constraints() -> None:
+    with engine.begin() as conn:
+        dialect = conn.dialect.name
+
+        def alter(table: str, column: str, length: int) -> None:
+            if dialect == "sqlite":
+                # SQLite does not enforce VARCHAR length strictly; rely on app validation.
+                return
+            conn.exec_driver_sql(
+                f"ALTER TABLE {table} ALTER COLUMN {column} TYPE VARCHAR({length})"
+            )
+
+        alter("team", "name", 100)
+        alter("team", "member_one", 100)
+        alter("team", "member_two", 100)
+        alter("rsvp", "name", 100)
+        alter("rsvp", "email", 100)
+        alter("freeagent", "name", 100)
+        alter("freeagent", "email", 100)
 
 
 def _ensure_playoff_columns() -> None:

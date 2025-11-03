@@ -6,8 +6,10 @@ import hmac
 import itertools
 import math
 import os
+import re
 import secrets
 import shutil
+import smtplib
 import time
 from datetime import datetime
 from io import BytesIO
@@ -21,6 +23,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select, func
+from email.message import EmailMessage
 
 try:  # Optional – used for HEIC conversion
     from pillow_heif import read_heif
@@ -70,6 +73,29 @@ EVENT_GALLERY_PREVIEW_LIMIT = 12
 CAST_PHOTO_LIMIT = 40
 CAST_APP_ID = os.getenv("CAST_APP_ID")
 CAST_SENDER_ENABLED = bool(CAST_APP_ID)
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
+SMTP_HOST = os.getenv("SMTP_HOST")
+SMTP_PORT_RAW = os.getenv("SMTP_PORT")
+SMTP_PORT = int(SMTP_PORT_RAW) if SMTP_PORT_RAW and SMTP_PORT_RAW.isdigit() else None
+SMTP_USERNAME = os.getenv("SMTP_USERNAME")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() in {"1", "true", "yes"}
+SMTP_USE_SSL = os.getenv("SMTP_USE_SSL", "false").lower() in {"1", "true", "yes"}
+SMTP_SENDER = os.getenv("SMTP_SENDER")
+
+MODERATION_APPROVED = "approved"
+MODERATION_BLOCKED = "blocked"
+REVIEW_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in [
+        r"http[s]?://",
+        r"www\.",
+        r"<[^>]+>",
+        r"\bseo\b",
+        r"\bviagra\b",
+    ]
+]
+MAX_TEXT_LENGTH = 100
 
 
 def _ensure_upload_dir() -> None:
@@ -116,6 +142,54 @@ def _decode_session(raw: str) -> bool:
     return True
 
 
+def notify_admin(subject: str, body: str) -> None:
+    if not ADMIN_EMAIL:
+        logger.info("Admin email not configured. Skipping notification: %s", subject)
+        logger.debug("Notification body: %s", body)
+        return
+
+    sender = SMTP_SENDER or SMTP_USERNAME or ADMIN_EMAIL
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = sender
+    message["To"] = ADMIN_EMAIL
+    message.set_content(body)
+
+    if not SMTP_HOST:
+        logger.info("SMTP host not configured. Logging notification instead: %s", subject)
+        logger.debug("Notification body: %s", body)
+        return
+
+    try:
+        if SMTP_USE_SSL:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT or 465) as server:
+                if SMTP_USERNAME and SMTP_PASSWORD:
+                    server.login(SMTP_USERNAME, SMTP_PASSWORD)
+                server.send_message(message)
+        else:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT or 587) as server:
+                if SMTP_USE_TLS:
+                    server.starttls()
+                if SMTP_USERNAME and SMTP_PASSWORD:
+                    server.login(SMTP_USERNAME, SMTP_PASSWORD)
+                server.send_message(message)
+    except Exception as exc:  # pragma: no cover - best effort logging
+        logger.warning("Failed to send admin notification '%s': %s", subject, exc)
+
+
+def needs_review(*values: str) -> bool:
+    combined = " ".join(filter(None, values)).strip()
+    if not combined:
+        return False
+    lower = combined.lower()
+    if len(lower) > MAX_TEXT_LENGTH:
+        return True
+    for pattern in REVIEW_PATTERNS:
+        if pattern.search(lower):
+            return True
+    return False
+
+
 def _is_admin(request: Request) -> bool:
     cookie_value = request.cookies.get(SESSION_COOKIE_NAME)
     return bool(cookie_value and _decode_session(cookie_value))
@@ -160,7 +234,8 @@ def _render(
 @router.get("/", response_class=HTMLResponse, name="index")
 async def index(request: Request, session: Session = Depends(get_session)):
     status = request.query_params.get("rsvp")
-    context = _home_context(session, rsvp_status=status)
+    is_admin = _is_admin(request)
+    context = _home_context(session, rsvp_status=status, include_blocked=is_admin)
     return _render(request, "index.html", context)
 
 
@@ -202,9 +277,9 @@ async def admin_login(request: Request, next: str | None = None):
 @router.post("/admin/login", response_class=HTMLResponse, name="admin_login_submit")
 async def admin_login_submit(
     request: Request,
-    username: str = Form(...),
-    password: str = Form(...),
-    next: str = Form(default="/bracket"),
+    username: str = Form(..., max_length=MAX_TEXT_LENGTH),
+    password: str = Form(..., max_length=MAX_TEXT_LENGTH),
+    next: str = Form(default="/bracket", max_length=MAX_TEXT_LENGTH),
 ):
     next_raw = _sanitize_next(next)
     if hmac.compare_digest(username, ADMIN_USERNAME) and hmac.compare_digest(password, ADMIN_PASSWORD):
@@ -225,7 +300,10 @@ async def admin_login_submit(
 
 
 @router.post("/admin/logout", response_class=HTMLResponse, name="admin_logout")
-async def admin_logout(request: Request, next: str | None = Form(default=None)):
+async def admin_logout(
+    request: Request,
+    next: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
+):
     next_raw = _sanitize_next(next or request.query_params.get("next"))
     response = RedirectResponse(_absolute_next(request, next_raw), status_code=303)
     response.delete_cookie(SESSION_COOKIE_NAME, path="/")
@@ -479,34 +557,48 @@ async def rules_page(request: Request, session: Session = Depends(get_session)):
 async def submit_rsvp(
     request: Request,
     session: Session = Depends(get_session),
-    name: str = Form(...),
+    name: str = Form(..., max_length=MAX_TEXT_LENGTH),
     guests: int = Form(default=1),
-    message: str | None = Form(default=None),
+    message: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
 ):
     event = get_active_event(session)
     trimmed_name = name.strip()
+    cleaned_message = message.strip() if message else None
     error: str | None = None
 
     if not trimmed_name:
         error = "Name is required."
+    elif len(trimmed_name) > MAX_TEXT_LENGTH:
+        error = f"Names must be {MAX_TEXT_LENGTH} characters or fewer."
+    elif cleaned_message and len(cleaned_message) > MAX_TEXT_LENGTH:
+        error = f"Messages must be {MAX_TEXT_LENGTH} characters or fewer."
     elif guests < 1:
         error = "Please include at least one guest."
 
     if error:
-        context = _home_context(session, rsvp_error=error)
+        context = _home_context(session, rsvp_error=error, include_blocked=_is_admin(request))
         return _render(request, "index.html", context, status_code=400)
 
+    cleaned_message = cleaned_message or None
+    flagged = needs_review(trimmed_name, cleaned_message or "")
+    status_value = MODERATION_BLOCKED if flagged else MODERATION_APPROVED
     rsvp = RSVP(
         name=trimmed_name,
         email="",
         guests=guests,
-        message=message.strip() if message else None,
+        message=cleaned_message,
         event_id=event.id,
+        status=status_value,
     )
     session.add(rsvp)
     session.commit()
+    notify_admin(
+        "RSVP submitted",
+        f"Name: {trimmed_name}\nGuests: {guests}\nMessage: {cleaned_message or '-'}\nStatus: {status_value}",
+    )
 
-    redirect_url = str(request.url_for("index")) + "?rsvp=saved"
+    redirect_state = "pending" if flagged else "saved"
+    redirect_url = str(request.url_for("index")) + f"?rsvp={redirect_state}"
     return RedirectResponse(redirect_url, status_code=303)
 
 
@@ -515,29 +607,79 @@ async def update_rsvp(
     request: Request,
     rsvp_id: int,
     session: Session = Depends(get_session),
-    name: str = Form(...),
+    name: str = Form(..., max_length=MAX_TEXT_LENGTH),
     guests: int = Form(...),
-    message: str | None = Form(default=None),
+    message: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
 ):
     rsvp = session.get(RSVP, rsvp_id)
     if not rsvp:
         raise HTTPException(status_code=404, detail="RSVP not found")
 
+    original_name = rsvp.name
+    original_guests = rsvp.guests
+    original_message = rsvp.message
+
     trimmed_name = name.strip()
+    cleaned_message = message.strip() if message else None
     if not trimmed_name:
-        context = _home_context(session, rsvp_error="Name is required.")
+        context = _home_context(session, rsvp_error="Name is required.", include_blocked=_is_admin(request))
+        return _render(request, "index.html", context, status_code=400)
+    if len(trimmed_name) > MAX_TEXT_LENGTH:
+        context = _home_context(
+            session,
+            rsvp_error=f"Names must be {MAX_TEXT_LENGTH} characters or fewer.",
+            include_blocked=_is_admin(request),
+        )
+        return _render(request, "index.html", context, status_code=400)
+    if cleaned_message and len(cleaned_message) > MAX_TEXT_LENGTH:
+        context = _home_context(
+            session,
+            rsvp_error=f"Messages must be {MAX_TEXT_LENGTH} characters or fewer.",
+            include_blocked=_is_admin(request),
+        )
         return _render(request, "index.html", context, status_code=400)
     if guests < 1:
-        context = _home_context(session, rsvp_error="Please include at least one guest.")
+        context = _home_context(session, rsvp_error="Please include at least one guest.", include_blocked=_is_admin(request))
         return _render(request, "index.html", context, status_code=400)
 
     rsvp.name = trimmed_name
     rsvp.guests = guests
-    rsvp.message = message.strip() if message else None
+    updated_message = cleaned_message or None
+    rsvp.message = updated_message
+
+    flagged_update = needs_review(trimmed_name, updated_message or "")
+    if flagged_update:
+        rsvp.status = MODERATION_BLOCKED
+        redirect_state = "pending"
+    else:
+        rsvp.status = MODERATION_APPROVED
+        redirect_state = "updated"
+
     session.add(rsvp)
     session.commit()
 
-    redirect_url = str(request.url_for("index")) + "?rsvp=updated"
+    if flagged_update:
+        notify_admin(
+            "RSVP update pending review",
+            (
+                "Original entry:\\n"
+                f"  Name: {original_name}\\n"
+                f"  Guests: {original_guests}\\n"
+                f"  Message: {(original_message or '-')}"
+                "\\n\\nRequested changes:\\n"
+                f"  Name: {trimmed_name}\\n"
+                f"  Guests: {guests}\\n"
+                f"  Message: {(updated_message or '-')}\\n"
+                f"Status: {rsvp.status}"
+            ),
+        )
+    else:
+        notify_admin(
+            "RSVP updated",
+            f"Name: {trimmed_name}\\nGuests: {guests}\\nMessage: {(updated_message or '-')}\\nStatus: {rsvp.status}",
+        )
+
+    redirect_url = str(request.url_for("index")) + f"?rsvp={redirect_state}"
     return RedirectResponse(redirect_url, status_code=303)
 
 
@@ -548,9 +690,30 @@ async def delete_rsvp(request: Request, rsvp_id: int, session: Session = Depends
         raise HTTPException(status_code=404, detail="RSVP not found")
     session.delete(rsvp)
     session.commit()
+    notify_admin("RSVP deleted", f"Name: {rsvp.name}\\nGuests: {rsvp.guests}")
 
     redirect_url = str(request.url_for("index")) + "?rsvp=deleted"
     return RedirectResponse(redirect_url, status_code=303)
+
+
+@router.post("/admin/rsvp/{rsvp_id}/approve", response_class=HTMLResponse, name="admin_approve_rsvp")
+async def admin_approve_rsvp(
+    request: Request,
+    rsvp_id: int,
+    session: Session = Depends(get_session),
+    next: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
+):
+    if not _is_admin(request):
+        return _admin_redirect(request)
+    rsvp = session.get(RSVP, rsvp_id)
+    if not rsvp:
+        raise HTTPException(status_code=404, detail="RSVP not found")
+    rsvp.status = MODERATION_APPROVED
+    session.add(rsvp)
+    session.commit()
+    notify_admin("RSVP approved", f"Name: {rsvp.name}\\nGuests: {rsvp.guests}")
+    target = next or request.url_for("index")
+    return RedirectResponse(str(target), status_code=303)
 
 
 @router.post("/photos", response_class=HTMLResponse, name="upload_photo")
@@ -675,9 +838,6 @@ async def team_directory(request: Request, session: Session = Depends(get_sessio
     success_message = None
     form_error = None
 
-    if request.query_params.get("created") == "1":
-        success_message = "Team added successfully."
-
     context = _team_context(
         session=session,
         form_error=form_error,
@@ -685,10 +845,13 @@ async def team_directory(request: Request, session: Session = Depends(get_sessio
         form_member_one="",
         form_member_two="",
         success_message=success_message,
+        is_admin=_is_admin(request),
     )
 
     team_status = request.query_params.get("team")
-    if team_status == "updated":
+    if team_status == "created":
+        context["success_message"] = "Team added successfully."
+    elif team_status == "updated":
         context["success_message"] = "Team updated."
     elif team_status == "deleted":
         context["success_message"] = "Team removed."
@@ -696,6 +859,10 @@ async def team_directory(request: Request, session: Session = Depends(get_sessio
         context["form_error"] = "That team name already exists."
     elif team_status == "invalid":
         context["form_error"] = "Team names must be at least two characters long."
+    elif team_status == "pending":
+        context["success_message"] = "Thanks! Your team will appear once an organizer approves it."
+    elif team_status == "too-long":
+        context["form_error"] = f"Team and player names must be {MAX_TEXT_LENGTH} characters or fewer."
 
     flag = request.query_params.get("free_agent")
     if flag == "added":
@@ -708,6 +875,10 @@ async def team_directory(request: Request, session: Session = Depends(get_sessio
         context["free_agent_success"] = "Free agent removed."
     elif flag == "error":
         context["free_agent_error"] = "Unable to update the free agent. Provide a name."
+    elif flag == "pending":
+        context["free_agent_success"] = "Thanks! We'll review that free-agent request shortly."
+    elif flag == "too-long":
+        context["free_agent_error"] = f"Free-agent details must be {MAX_TEXT_LENGTH} characters or fewer."
 
     context.setdefault("free_agent_error", None)
     context.setdefault("free_agent_success", None)
@@ -718,9 +889,9 @@ async def team_directory(request: Request, session: Session = Depends(get_sessio
 async def create_team(
     request: Request,
     session: Session = Depends(get_session),
-    name: str = Form(default=""),
-    member_one: str = Form(default=""),
-    member_two: str = Form(default=""),
+    name: str = Form(default="", max_length=MAX_TEXT_LENGTH),
+    member_one: str = Form(default="", max_length=MAX_TEXT_LENGTH),
+    member_two: str = Form(default="", max_length=MAX_TEXT_LENGTH),
 ):
     cleaned = name.strip()
     first_player = member_one.strip() or None
@@ -730,6 +901,12 @@ async def create_team(
 
     if len(cleaned) < 2:
         error = "Team names must be at least two characters long."
+    elif len(cleaned) > MAX_TEXT_LENGTH:
+        error = f"Team names must be {MAX_TEXT_LENGTH} characters or fewer."
+    elif first_player and len(first_player) > MAX_TEXT_LENGTH:
+        error = f"Player names must be {MAX_TEXT_LENGTH} characters or fewer."
+    elif second_player and len(second_player) > MAX_TEXT_LENGTH:
+        error = f"Player names must be {MAX_TEXT_LENGTH} characters or fewer."
     else:
         existing = session.exec(select(Team).where((Team.name == cleaned) & (Team.event_id == event.id))).first()
         if existing:
@@ -743,23 +920,33 @@ async def create_team(
             form_member_one=member_one,
             form_member_two=member_two,
             success_message=None,
+            is_admin=_is_admin(request),
         )
         return _render(request, "teams.html", context)
 
+    flagged = needs_review(cleaned, first_player or "", second_player or "")
+    team_status = MODERATION_BLOCKED if flagged else MODERATION_APPROVED
     team = Team(
         name=cleaned,
         event_id=event.id,
         member_one=first_player,
         member_two=second_player,
+        status=team_status,
     )
     session.add(team)
     session.commit()
     session.refresh(team)
 
-    _clear_event_matches(session, event.id)
-    session.commit()
+    if not flagged:
+        _clear_event_matches(session, event.id)
+        session.commit()
+    notify_admin(
+        "Team created",
+        f"Team: {cleaned}\nMembers: {(first_player or 'TBD')} & {(second_player or 'TBD')}\nStatus: {team_status}",
+    )
 
-    redirect_url = str(request.url_for("team_directory")) + "?created=1"
+    redirect_state = "pending" if flagged else "created"
+    redirect_url = str(request.url_for("team_directory")) + f"?team={redirect_state}"
     return RedirectResponse(redirect_url, status_code=303)
 
 
@@ -768,19 +955,29 @@ async def update_team(
     request: Request,
     team_id: int,
     session: Session = Depends(get_session),
-    name: str = Form(...),
-    member_one: str = Form(...),
-    member_two: str = Form(...),
+    name: str = Form(..., max_length=MAX_TEXT_LENGTH),
+    member_one: str = Form(..., max_length=MAX_TEXT_LENGTH),
+    member_two: str = Form(..., max_length=MAX_TEXT_LENGTH),
 ):
     team = session.get(Team, team_id)
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
+
+    original_name = team.name
+    original_member_one = team.member_one
+    original_member_two = team.member_two
+    original_status = team.status
 
     cleaned = name.strip()
     first_player = member_one.strip() or None
     second_player = member_two.strip() or None
     if len(cleaned) < 2:
         redirect_url = str(request.url_for("team_directory")) + "?team=invalid"
+        return RedirectResponse(redirect_url, status_code=303)
+    if len(cleaned) > MAX_TEXT_LENGTH or (
+        first_player and len(first_player) > MAX_TEXT_LENGTH
+    ) or (second_player and len(second_player) > MAX_TEXT_LENGTH):
+        redirect_url = str(request.url_for("team_directory")) + "?team=too-long"
         return RedirectResponse(redirect_url, status_code=303)
 
     duplicate = session.exec(
@@ -794,9 +991,39 @@ async def update_team(
     team.member_one = first_player
     team.member_two = second_player
     session.add(team)
-    session.commit()
+    flagged = needs_review(cleaned, first_player or "", second_player or "")
+    if flagged:
+        team.status = MODERATION_BLOCKED
+        session.commit()
+        redirect_state = "pending"
+    else:
+        team.status = MODERATION_APPROVED
+        session.commit()
+        _clear_event_matches(session, team.event_id)
+        session.commit()
+        redirect_state = "updated"
 
-    redirect_url = str(request.url_for("team_directory")) + "?team=updated"
+    if flagged:
+        notify_admin(
+            "Team update pending review",
+            (
+                "Original entry:\n"
+                f"  Team: {original_name}\n"
+                f"  Members: {(original_member_one or 'TBD')} & {(original_member_two or 'TBD')}\n"
+                f"  Status: {original_status}\n\n"
+                "Requested changes:\n"
+                f"  Team: {team.name}\n"
+                f"  Members: {(team.member_one or 'TBD')} & {(team.member_two or 'TBD')}\n"
+                f"  Status: {team.status}"
+            ),
+        )
+    else:
+        notify_admin(
+            "Team updated",
+            f"Team: {team.name}\nMembers: {(team.member_one or 'TBD')} & {(team.member_two or 'TBD')}\nStatus: {team.status}",
+        )
+
+    redirect_url = str(request.url_for("team_directory")) + f"?team={redirect_state}"
     return RedirectResponse(redirect_url, status_code=303)
 
 
@@ -816,21 +1043,45 @@ async def delete_team(request: Request, team_id: int, session: Session = Depends
     _clear_event_matches(session, event_id)
     session.delete(team)
     session.commit()
+    notify_admin("Team deleted", f"Team: {team.name}")
 
     redirect_url = str(request.url_for("team_directory")) + "?team=deleted"
     return RedirectResponse(redirect_url, status_code=303)
+
+
+@router.post("/admin/team/{team_id}/approve", response_class=HTMLResponse, name="admin_approve_team")
+async def admin_approve_team(
+    request: Request,
+    team_id: int,
+    session: Session = Depends(get_session),
+    next: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
+):
+    if not _is_admin(request):
+        return _admin_redirect(request)
+    team = session.get(Team, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    team.status = MODERATION_APPROVED
+    session.add(team)
+    session.commit()
+    _clear_event_matches(session, team.event_id)
+    session.commit()
+    notify_admin("Team approved", f"Team: {team.name}")
+    target = next or request.url_for("team_directory")
+    return RedirectResponse(str(target), status_code=303)
 
 
 @router.post("/free-agent", response_class=HTMLResponse, name="register_free_agent")
 async def register_free_agent(
     request: Request,
     session: Session = Depends(get_session),
-    name: str = Form(...),
-    email: str | None = Form(default=None),
-    note: str | None = Form(default=None),
+    name: str = Form(..., max_length=MAX_TEXT_LENGTH),
+    email: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
+    note: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
 ):
     trimmed_name = name.strip()
     trimmed_email = email.strip() if email else None
+    cleaned_note = note.strip() if note else None
     event = get_active_event(session)
 
     if not trimmed_name:
@@ -841,21 +1092,70 @@ async def register_free_agent(
             form_member_one="",
             form_member_two="",
             success_message=None,
+            is_admin=_is_admin(request),
         )
         context["free_agent_error"] = "Name is required for free agents."
         context.setdefault("free_agent_success", None)
         return _render(request, "teams.html", context, status_code=400)
+    if len(trimmed_name) > MAX_TEXT_LENGTH:
+        context = _team_context(
+            session=session,
+            form_error=None,
+            form_value="",
+            form_member_one="",
+            form_member_two="",
+            success_message=None,
+            is_admin=_is_admin(request),
+        )
+        context["free_agent_error"] = f"Free-agent names must be {MAX_TEXT_LENGTH} characters or fewer."
+        context.setdefault("free_agent_success", None)
+        return _render(request, "teams.html", context, status_code=400)
+    if trimmed_email and len(trimmed_email) > MAX_TEXT_LENGTH:
+        context = _team_context(
+            session=session,
+            form_error=None,
+            form_value="",
+            form_member_one="",
+            form_member_two="",
+            success_message=None,
+            is_admin=_is_admin(request),
+        )
+        context["free_agent_error"] = f"Emails must be {MAX_TEXT_LENGTH} characters or fewer."
+        context.setdefault("free_agent_success", None)
+        return _render(request, "teams.html", context, status_code=400)
+    if cleaned_note and len(cleaned_note) > MAX_TEXT_LENGTH:
+        context = _team_context(
+            session=session,
+            form_error=None,
+            form_value="",
+            form_member_one="",
+            form_member_two="",
+            success_message=None,
+            is_admin=_is_admin(request),
+        )
+        context["free_agent_error"] = f"Notes must be {MAX_TEXT_LENGTH} characters or fewer."
+        context.setdefault("free_agent_success", None)
+        return _render(request, "teams.html", context, status_code=400)
 
+    cleaned_email = trimmed_email or ""
+    flagged = needs_review(trimmed_name, cleaned_email, cleaned_note or "")
+    moderation_status = MODERATION_BLOCKED if flagged else MODERATION_APPROVED
     agent = FreeAgent(
         name=trimmed_name,
-        email=trimmed_email or "",
-        note=note.strip() if note else None,
+        email=cleaned_email,
+        note=cleaned_note,
         event_id=event.id,
+        moderation_status=moderation_status,
     )
     session.add(agent)
     session.commit()
+    notify_admin(
+        "Free agent joined",
+        f"Name: {trimmed_name}\nEmail: {trimmed_email or '-'}\nNote: {agent.note or '-'}\nStatus: {moderation_status}",
+    )
 
-    redirect_url = str(request.url_for("team_directory")) + "?free_agent=added"
+    redirect_state = "pending" if flagged else "added"
+    redirect_url = str(request.url_for("team_directory")) + f"?free_agent={redirect_state}"
     return RedirectResponse(redirect_url, status_code=303)
 
 
@@ -864,28 +1164,91 @@ async def update_free_agent(
     request: Request,
     agent_id: int,
     session: Session = Depends(get_session),
-    name: str = Form(...),
-    status: str = Form(...),
-    note: str | None = Form(default=None),
-    team_id: str | None = Form(default=None),
-    pair_with: str | None = Form(default=None),
+    name: str = Form(..., max_length=MAX_TEXT_LENGTH),
+    status: str = Form(..., max_length=MAX_TEXT_LENGTH),
+    note: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
+    team_id: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
+    pair_with: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
 ):
     agent = session.get(FreeAgent, agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Free agent not found")
 
+    def _team_label(team_identifier: int | None) -> str:
+        if not team_identifier:
+            return "-- No team --"
+        team_obj = session.get(Team, team_identifier)
+        return team_obj.name if team_obj else f"Team #{team_identifier}"
+
+    original_name = agent.name
+    original_note = agent.note
+    original_status = agent.status
+    original_team_id = agent.team_id
+    original_moderation = agent.moderation_status
+
     trimmed_name = name.strip()
+    cleaned_note = note.strip() if note else None
     if not trimmed_name:
         redirect_url = str(request.url_for("team_directory")) + "?free_agent=error"
+        return RedirectResponse(redirect_url, status_code=303)
+    if len(trimmed_name) > MAX_TEXT_LENGTH or (cleaned_note and len(cleaned_note) > MAX_TEXT_LENGTH):
+        redirect_url = str(request.url_for("team_directory")) + "?free_agent=too-long"
         return RedirectResponse(redirect_url, status_code=303)
 
     status_value = status.lower()
     if status_value not in ALLOWED_FREE_AGENT_STATUSES:
         status_value = "pending"
+    requested_status = status_value
 
     agent.name = trimmed_name
-    agent.note = note.strip() if note else None
+    agent.note = cleaned_note
     agent.status = status_value
+
+    requested_team_id: int | None = None
+    requested_team_name: str | None = None
+    if team_id:
+        try:
+            candidate_id = int(team_id)
+        except ValueError:
+            candidate_id = None
+        if candidate_id is not None:
+            candidate_team = session.get(Team, candidate_id)
+            if candidate_team and candidate_team.event_id == agent.event_id:
+                requested_team_id = candidate_team.id
+                requested_team_name = candidate_team.name
+
+    flagged = needs_review(trimmed_name, agent.email or "", agent.note or "")
+    agent.moderation_status = MODERATION_BLOCKED if flagged else MODERATION_APPROVED
+
+    if agent.moderation_status != MODERATION_APPROVED:
+        agent.team_id = None
+        agent.status = "pending"
+        session.add(agent)
+        session.commit()
+        original_team_label = _team_label(original_team_id)
+        requested_team_label = requested_team_name or "-- No team --"
+        notify_admin(
+            "Free agent update pending",
+            (
+                "Original entry:\n"
+                f"  Name: {original_name}\n"
+                f"  Email: {agent.email or '-'}\n"
+                f"  Status: {original_status}\n"
+                f"  Note: {(original_note or '-')}\n"
+                f"  Team: {original_team_label}\n"
+                f"  Moderation: {original_moderation}\n\n"
+                "Requested changes:\n"
+                f"  Name: {trimmed_name}\n"
+                f"  Email: {agent.email or '-'}\n"
+                f"  Status: {requested_status}\n"
+                f"  Note: {(cleaned_note or '-')}\n"
+                f"  Team: {requested_team_label}\n"
+                f"  Moderation: {agent.moderation_status}\n"
+                f"  Stored status while pending: {agent.status}"
+            ),
+        )
+        redirect_url = str(request.url_for("team_directory")) + "?free_agent=pending"
+        return RedirectResponse(redirect_url, status_code=303)
 
     # Optional: pair with another free agent to create a new team
     if pair_with:
@@ -923,26 +1286,20 @@ async def update_free_agent(
             redirect_url = str(request.url_for("team_directory")) + "?free_agent=paired"
             return RedirectResponse(redirect_url, status_code=303)
 
-    assigned_team_id: int | None = None
-    if team_id:
-        try:
-            candidate_id = int(team_id)
-        except ValueError:
-            candidate_id = None
-        if candidate_id is not None:
-            team = session.get(Team, candidate_id)
-            if team and team.event_id == agent.event_id:
-                assigned_team_id = team.id
-
-    if assigned_team_id is None or status_value == "pending":
+    if requested_team_id is None or status_value == "pending":
         agent.team_id = None
         agent.status = "pending"
     else:
-        agent.team_id = assigned_team_id
+        agent.team_id = requested_team_id
         agent.status = "paired"
 
     session.add(agent)
     session.commit()
+
+    notify_admin(
+        "Free agent updated",
+        f"Name: {agent.name}\nEmail: {agent.email or '-'}\nNote: {agent.note or '-'}\nStatus: {agent.status}\nModeration: {agent.moderation_status}",
+    )
 
     redirect_url = str(request.url_for("team_directory")) + "?free_agent=updated"
     return RedirectResponse(redirect_url, status_code=303)
@@ -955,9 +1312,37 @@ async def delete_free_agent(request: Request, agent_id: int, session: Session = 
         raise HTTPException(status_code=404, detail="Free agent not found")
     session.delete(agent)
     session.commit()
+    notify_admin("Free agent deleted", f"Name: {agent.name}\nEmail: {agent.email or '-'}")
 
     redirect_url = str(request.url_for("team_directory")) + "?free_agent=deleted"
     return RedirectResponse(redirect_url, status_code=303)
+
+
+@router.post(
+    "/admin/free-agent/{agent_id}/approve",
+    response_class=HTMLResponse,
+    name="admin_approve_free_agent",
+)
+async def admin_approve_free_agent(
+    request: Request,
+    agent_id: int,
+    session: Session = Depends(get_session),
+    next: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
+):
+    if not _is_admin(request):
+        return _admin_redirect(request)
+    agent = session.get(FreeAgent, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Free agent not found")
+    agent.moderation_status = MODERATION_APPROVED
+    session.add(agent)
+    session.commit()
+    notify_admin(
+        "Free agent approved",
+        f"Name: {agent.name}\nEmail: {agent.email or '-'}\nStatus: {agent.status}",
+    )
+    target = next or request.url_for("team_directory")
+    return RedirectResponse(str(target), status_code=303)
 
 
 @router.post("/matches/{match_id}/score", response_class=HTMLResponse, name="record_score")
@@ -997,9 +1382,10 @@ def _home_context(
     *,
     rsvp_error: str | None = None,
     rsvp_status: str | None = None,
+    include_blocked: bool = False,
 ) -> dict[str, object]:
     event = get_active_event(session)
-    rsvps = _fetch_rsvps(session, event.id)
+    rsvps = _fetch_rsvps(session, event.id, status=MODERATION_APPROVED)
     guest_total = sum(r.guests for r in rsvps)
     return {
         "event": event,
@@ -1007,6 +1393,7 @@ def _home_context(
         "guest_total": guest_total,
         "rsvp_error": rsvp_error,
         "rsvp_status": rsvp_status,
+        "blocked_rsvps": _fetch_rsvps(session, event.id, status=MODERATION_BLOCKED) if include_blocked else [],
     }
 
 
@@ -1036,7 +1423,12 @@ def _events_context(session: Session) -> list[dict[str, object]]:
     ).all()
     cards: list[dict[str, object]] = []
     for event in events:
-        team_count = len(session.exec(select(Team).where(Team.event_id == event.id)).all())
+        team_count = len(
+            session.exec(
+                select(Team)
+                .where((Team.event_id == event.id) & (Team.status == MODERATION_APPROVED))
+            ).all()
+        )
         photo_query = (
             select(Photo)
             .where(Photo.event_id == event.id)
@@ -1080,7 +1472,11 @@ def _needs_bucket_pool(team_count: int) -> bool:
 
 def _schedule_context(session: Session) -> dict[str, object]:
     event = get_active_event(session)
-    teams = session.exec(select(Team).where(Team.event_id == event.id).order_by(Team.created_at)).all()
+    teams = session.exec(
+        select(Team)
+        .where((Team.event_id == event.id) & (Team.status == MODERATION_APPROVED))
+        .order_by(Team.created_at)
+    ).all()
     bucket_pool_mode = _needs_bucket_pool(len(teams))
     matches = _ensure_matches(session, event, bucket_pool_mode, teams)
     _refresh_match_statuses(session, event.id)
@@ -1273,7 +1669,11 @@ def _ensure_matches(
         return existing
 
     if teams is None:
-        teams = session.exec(select(Team).where(Team.event_id == event.id).order_by(Team.created_at)).all()
+        teams = session.exec(
+            select(Team)
+            .where((Team.event_id == event.id) & (Team.status == MODERATION_APPROVED))
+            .order_by(Team.created_at)
+        ).all()
     if len(teams) < 2:
         return []
 
@@ -1665,8 +2065,13 @@ def _refresh_match_statuses(session: Session, event_id: int) -> None:
     session.commit()
 
 
-def _fetch_rsvps(session: Session, event_id: int):
-    return session.exec(select(RSVP).where(RSVP.event_id == event_id).order_by(RSVP.created_at.desc())).all()
+def _fetch_rsvps(session: Session, event_id: int, *, status: str | None = MODERATION_APPROVED):
+    query = select(RSVP).where(RSVP.event_id == event_id)
+    if status == MODERATION_APPROVED:
+        query = query.where(RSVP.status == MODERATION_APPROVED)
+    elif status == MODERATION_BLOCKED:
+        query = query.where(RSVP.status == MODERATION_BLOCKED)
+    return session.exec(query.order_by(RSVP.created_at.desc())).all()
 
 
 def _fetch_photos(session: Session, event_id: int):
@@ -1807,15 +2212,39 @@ def _team_context(
     form_member_one: str,
     form_member_two: str,
     success_message: str | None,
+    is_admin: bool,
 ) -> dict[str, object]:
     event = get_active_event(session)
-    teams = session.exec(select(Team).where(Team.event_id == event.id).order_by(Team.created_at.desc())).all()
-    team_lookup = {team.id: team.name for team in teams}
+    approved_teams = session.exec(
+        select(Team)
+        .where((Team.event_id == event.id) & (Team.status == MODERATION_APPROVED))
+        .order_by(Team.created_at.desc())
+    ).all()
+    team_lookup = {team.id: team.name for team in approved_teams}
     free_agents_pending = _fetch_free_agents(session, event.id, status="pending")
     free_agents_paired = _fetch_free_agents(session, event.id, status="paired")
+
+    blocked_teams: list[Team] = []
+    blocked_pending_agents: list[FreeAgent] = []
+    if is_admin:
+        blocked_teams = session.exec(
+            select(Team)
+            .where((Team.event_id == event.id) & (Team.status != MODERATION_APPROVED))
+            .order_by(Team.created_at.desc())
+        ).all()
+        blocked_pending_agents = session.exec(
+            select(FreeAgent)
+            .where(
+                (FreeAgent.event_id == event.id)
+                & (FreeAgent.status == "pending")
+                & (FreeAgent.moderation_status != MODERATION_APPROVED)
+            )
+            .order_by(FreeAgent.created_at.desc())
+        ).all()
+
     return {
         "event": event,
-        "teams": teams,
+        "teams": approved_teams,
         "form_error": form_error,
         "form_value": form_value,
         "form_member_one": form_member_one,
@@ -1824,15 +2253,22 @@ def _team_context(
         "free_agents_pending": free_agents_pending,
         "free_agents_paired": free_agents_paired,
         "team_lookup": team_lookup,
+        "blocked_teams": blocked_teams,
+        "blocked_free_agents": blocked_pending_agents,
     }
 
 
-def _fetch_free_agents(session: Session, event_id: int, *, status: str) -> list[FreeAgent]:
-    return session.exec(
-        select(FreeAgent)
-        .where((FreeAgent.event_id == event_id) & (FreeAgent.status == status))
-        .order_by(FreeAgent.created_at)
-    ).all()
+def _fetch_free_agents(
+    session: Session,
+    event_id: int,
+    *,
+    status: str,
+    include_blocked: bool = False,
+) -> list[FreeAgent]:
+    query = select(FreeAgent).where((FreeAgent.event_id == event_id) & (FreeAgent.status == status))
+    if not include_blocked:
+        query = query.where(FreeAgent.moderation_status == MODERATION_APPROVED)
+    return session.exec(query.order_by(FreeAgent.created_at)).all()
 
 
 def _pair_free_agents(session: Session, event: Event) -> list[Team]:
@@ -1847,6 +2283,7 @@ def _pair_free_agents(session: Session, event: Event) -> list[Team]:
             event_id=event.id,
             member_one=(first.name.strip() or first.name),
             member_two=(second.name.strip() or second.name),
+            status=MODERATION_APPROVED,
         )
         session.add(team)
         session.commit()
@@ -1868,14 +2305,17 @@ def _pair_free_agents(session: Session, event: Event) -> list[Team]:
 
 def _generate_free_agent_team_name(session: Session, first: FreeAgent, second: FreeAgent) -> str:
     def short(name: str) -> str:
-        return name.split()[0] if name.strip() else "Agent"
+        token = name.split()[0] if name.strip() else "Agent"
+        return token[: MAX_TEXT_LENGTH // 2]
 
-    base = f"Free Agents {short(first.name)} & {short(second.name)}"
+    base = f"Free Agents {short(first.name)} & {short(second.name)}".strip()
+    base = base[:MAX_TEXT_LENGTH]
     candidate = base
     counter = 1
     while session.exec(select(Team).where(Team.name == candidate)).first():
+        suffix = f" #{counter}"
+        candidate = (base[: max(1, MAX_TEXT_LENGTH - len(suffix))] + suffix).strip()
         counter += 1
-        candidate = f"{base} #{counter}"
     return candidate
 
 

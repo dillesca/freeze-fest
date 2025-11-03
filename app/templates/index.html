@@ -67,13 +67,13 @@
         <p>Let us know you’re coming so we can prep heats, scorecards, and refreshments.</p>
         <form method="post" action="{{ request.url_for('submit_rsvp') }}" class="rsvp-form">
           <label for="rsvp-name">Full name</label>
-          <input id="rsvp-name" name="name" type="text" required placeholder="Alex Snow" />
+          <input id="rsvp-name" name="name" type="text" required maxlength="100" placeholder="Alex Snow" />
 
           <label for="rsvp-guests">How many in your party?</label>
           <input id="rsvp-guests" name="guests" type="number" min="1" value="1" required />
 
           <label for="rsvp-message">Anything we should know?</label>
-          <textarea id="rsvp-message" name="message" rows="3" placeholder="Team preferences, accessibility needs, etc."></textarea>
+          <textarea id="rsvp-message" name="message" rows="3" maxlength="100" placeholder="Team preferences, accessibility needs, etc."></textarea>
 
           <button type="submit">Send RSVP</button>
         </form>
@@ -87,6 +87,8 @@
         <p class="form-success">RSVP updated.</p>
         {% elif rsvp_status == 'deleted' %}
         <p class="form-success">RSVP removed.</p>
+        {% elif rsvp_status == 'pending' %}
+        <p class="form-success">Thanks! An organizer will review your RSVP shortly.</p>
         {% endif %}
       </section>
 
@@ -131,13 +133,13 @@
               <summary>Manage RSVP</summary>
               <form method="post" action="{{ request.url_for('update_rsvp', rsvp_id=entry.id) }}" class="inline-form">
                 <label for="rsvp-edit-name-{{ entry.id }}">Full name</label>
-                <input id="rsvp-edit-name-{{ entry.id }}" name="name" type="text" value="{{ entry.name }}" required minlength="1" />
+                <input id="rsvp-edit-name-{{ entry.id }}" name="name" type="text" value="{{ entry.name }}" required minlength="1" maxlength="100" />
 
                 <label for="rsvp-edit-guests-{{ entry.id }}">Guests</label>
                 <input id="rsvp-edit-guests-{{ entry.id }}" name="guests" type="number" min="1" value="{{ entry.guests }}" required />
 
                 <label for="rsvp-edit-message-{{ entry.id }}">Message</label>
-                <textarea id="rsvp-edit-message-{{ entry.id }}" name="message" rows="2">{{ entry.message or '' }}</textarea>
+                <textarea id="rsvp-edit-message-{{ entry.id }}" name="message" rows="2" maxlength="100">{{ entry.message or '' }}</textarea>
 
                 <div class="inline-actions">
                   <button type="submit">Save changes</button>
@@ -160,6 +162,29 @@
         <p class="empty-state">No RSVPs yet — be the first to confirm!</p>
         {% endif %}
       </section>
+
+      {% if is_admin and blocked_rsvps %}
+      <section class="panel panel--warning">
+        <h2>RSVPs Awaiting Review</h2>
+        <ul class="moderation-list">
+          {% for entry in blocked_rsvps %}
+          <li class="moderation-list__item">
+            <div>
+              <strong>{{ entry.name }}</strong>
+              <span class="rsvp-meta">{{ entry.guests }} attending</span>
+              {% if entry.message %}
+              <p class="rsvp-note">“{{ entry.message }}”</p>
+              {% endif %}
+            </div>
+            <form method="post" action="{{ request.url_for('admin_approve_rsvp', rsvp_id=entry.id) }}" class="moderation-approve">
+              <input type="hidden" name="next" value="{{ request.url.path }}" />
+              <button type="submit" class="btn-secondary">Approve RSVP</button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
 
     </main>
 
