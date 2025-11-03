@@ -108,6 +108,19 @@
     <script>
       window.CAST_STATE = {{ cast_state | tojson }};
     </script>
+    <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js" defer></script>
     <script src="{{ request.url_for('static', path='js/cast.js') }}" defer></script>
+    <script>
+      window.addEventListener("load", () => {
+        const hasCastFramework = window.cast && window.cast.framework;
+        if (!hasCastFramework) {
+          return;
+        }
+
+        const context = window.cast.framework.CastReceiverContext.getInstance();
+        context.setInactivityTimeout(3600);
+        context.start({ statusText: "Freeze Fest Live" });
+      });
+    </script>
   </body>
 </html>

@@ -312,9 +312,9 @@ body {
 
 .cast-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.65fr) minmax(320px, 1fr);
-  gap: clamp(1.25rem, 3vw, 2.5rem);
-  padding: clamp(1.25rem, 3vw, 2.75rem);
+  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  gap: clamp(1.5rem, 3.5vw, 3rem);
+  padding: clamp(1.5rem, 3.5vw, 3rem);
   height: 100vh;
   box-sizing: border-box;
   align-items: stretch;
@@ -325,6 +325,7 @@ body {
   flex-direction: column;
   justify-content: flex-start;
   gap: 1rem;
+  height: 100%;
 }
 
 .cast-photo__frame {
@@ -332,12 +333,13 @@ body {
   border-radius: 24px;
   overflow: hidden;
   background: rgba(10, 16, 26, 0.72);
-  min-height: clamp(280px, 45vh, 540px);
-  max-height: clamp(340px, 52vh, 560px);
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: 0 28px 45px rgba(0, 0, 0, 0.42);
+  flex: 1;
+  min-height: 0;
+  height: 100%;
 }
 
 .cast-photo__frame::after {
@@ -386,9 +388,10 @@ body {
 }
 
 .cast-info {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto 1fr;
   gap: 1.25rem;
+  height: 100%;
 }
 
 .cast-info__header {
@@ -428,40 +431,42 @@ body {
 
 .cast-games {
   display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   align-content: start;
+  overflow-y: auto;
+  padding-right: 0.5rem;
 }
 
 .cast-card {
   background: rgba(15, 24, 44, 0.74);
-  padding: 1.25rem;
-  border-radius: 20px;
-  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.32);
+  padding: 0.9rem 1rem;
+  border-radius: 18px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
 }
 
 .cast-card h2 {
-  margin: 0 0 0.35rem;
-  font-size: 1.2rem;
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
 .cast-card__section {
-  margin-top: 0.75rem;
+  margin-top: 0.6rem;
 }
 
 .cast-card__section h3 {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   opacity: 0.7;
 }
 
 .cast-card__value {
-  margin: 0.35rem 0 0;
-  font-size: 1.05rem;
+  margin: 0.3rem 0 0;
+  font-size: 0.95rem;
   font-weight: 600;
 }
 
@@ -479,7 +484,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  font-size: 1rem;
+  font-size: 0.95rem;
 }
 
 .cast-card--empty {
@@ -490,7 +495,7 @@ body {
   margin-bottom: 0.75rem;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 860px) {
   .cast-layout {
     grid-template-columns: 1fr;
     height: auto;
@@ -499,7 +504,7 @@ body {
 
   .cast-photo__frame {
     min-height: clamp(260px, 50vh, 500px);
-    max-height: clamp(320px, 60vh, 560px);
+    max-height: clamp(320px, 65vh, 600px);
   }
 
   .cast-info__header {
