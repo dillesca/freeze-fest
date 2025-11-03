@@ -62,6 +62,7 @@ body {
   align-self: stretch;
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   width: 100%;
   gap: 0.5rem;
   font-size: 0.9rem;
@@ -77,6 +78,33 @@ body {
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
+}
+
+.cast-launcher {
+  --disconnected-color: rgba(255, 255, 255, 0.85);
+  --inactive-color: rgba(255, 255, 255, 0.5);
+  --connected-color: #1dd15a;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  transition: background 150ms ease, transform 150ms ease;
+}
+
+.cast-launcher:hover,
+.cast-launcher:focus-visible {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.cast-launcher:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.65);
+  outline-offset: 2px;
 }
 
 .admin-banner a:hover,
@@ -214,6 +242,37 @@ body {
   letter-spacing: 0.04em;
   text-align: center;
   color: rgba(244, 247, 255, 0.9);
+}
+
+.lightbox-overlay__caption.is-hidden {
+  display: none;
+}
+
+.lightbox-overlay__actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.lightbox-overlay__download {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  border-radius: 999px;
+  padding: 0.55rem 1.4rem;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+
+.lightbox-overlay__download:hover,
+.lightbox-overlay__download:focus-visible {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.lightbox-overlay__download:disabled {
+  opacity: 0.6;
+  cursor: progress;
 }
 
 .lightbox-overlay__close {

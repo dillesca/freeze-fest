@@ -6,6 +6,9 @@
     <title>Past Freeze Fest Events</title>
     <link rel="icon" type="image/png" href="{{ request.url_for('static', path='img/freezefest.png') }}">
     <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
+    {% if cast_sender_enabled %}
+    {% include '_cast_sender_head.html' %}
+    {% endif %}
   </head>
   <body>
     {% set current_target = request.url.path %}
@@ -14,7 +17,10 @@
     {% endif %}
     <header class="page-header">
       <div class="page-header__inner">
-        <div class="admin-banner" role="navigation" aria-label="Admin">
+        <div class="admin-banner" role="navigation" aria-label="Admin and casting">
+          {% if cast_sender_enabled %}
+          <google-cast-launcher class="cast-launcher" aria-label="Cast to TV"></google-cast-launcher>
+          {% endif %}
           {% if is_admin %}
           <form method="post" action="{{ request.url_for('admin_logout') }}" class="admin-banner__logout">
             <input type="hidden" name="next" value="{{ current_target }}" />

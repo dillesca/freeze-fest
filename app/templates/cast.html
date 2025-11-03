@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ cast_state.event.name }} • Live Cast</title>
+    <link rel="icon" type="image/png" href="{{ request.url_for('static', path='img/freezefest.png') }}">
+    <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
+  </head>
+  <body class="cast-body">
+    <main class="cast-layout">
+      <section class="cast-photo">
+        <div class="cast-photo__frame">
+          {% if cast_state.photos %}
+          <img
+            src="{{ cast_state.photos[0].image_url }}"
+            alt="Freeze Fest event highlight"
+            loading="lazy"
+            data-cast-photo
+          />
+          {% else %}
+          <div class="cast-photo__placeholder" data-cast-photo-placeholder>
+            <p>No photos yet. Upload highlights to start the slideshow.</p>
+          </div>
+          {% endif %}
+        </div>
+        <div class="cast-photo__meta">
+          <span class="cast-photo__caption" data-photo-caption>
+            {% if cast_state.photos %}
+            {{ cast_state.photos[0].original_name }}
+            {% else %}
+            Gallery will update automatically when new photos arrive.
+            {% endif %}
+          </span>
+        </div>
+      </section>
+
+      <aside class="cast-info">
+        <header class="cast-info__header">
+          <div class="cast-info__logo">
+            <img src="{{ request.url_for('static', path='img/freezefest.png') }}" alt="Freeze Fest mascot" />
+          </div>
+          <div class="cast-info__titles">
+            <h1>{{ cast_state.event.name }}</h1>
+            {% if cast_state.event.location %}
+            <p class="cast-info__location">{{ cast_state.event.location }}</p>
+            {% endif %}
+            <p class="cast-info__updated">
+              Last updated
+              <span data-last-updated>{{ cast_state.generated_at }}</span>
+            </p>
+          </div>
+        </header>
+
+        <section class="cast-games" data-cast-games>
+          {% if cast_state.games %}
+            {% for item in cast_state.games %}
+            <article class="cast-card">
+              <h2>{{ item.game }}</h2>
+              <div class="cast-card__section">
+                <h3>Playing Now</h3>
+                <p class="cast-card__value" data-role="current">
+                  {% if item.current %}
+                    {% if item.current.is_bye %}
+                      {{ item.current.team1 }} (solo run)
+                    {% elif item.current.team2 %}
+                      {{ item.current.team1 }} vs {{ item.current.team2 }}
+                    {% else %}
+                      {{ item.current.team1 }}
+                    {% endif %}
+                  {% elif item.remaining == 0 %}
+                    All matches complete
+                  {% else %}
+                    Waiting for the next teams
+                  {% endif %}
+                </p>
+              </div>
+              <div class="cast-card__section">
+                <h3>On Deck</h3>
+                <p class="cast-card__value" data-role="next">
+                  {% if item.next %}
+                    {% if item.next.is_bye %}
+                      {{ item.next.team1 }} (solo run)
+                    {% elif item.next.team2 %}
+                      {{ item.next.team1 }} vs {{ item.next.team2 }}
+                    {% else %}
+                      {{ item.next.team1 }}
+                    {% endif %}
+                  {% elif item.remaining == 0 %}
+                    Tournament finished for this game
+                  {% else %}
+                    Stand by for assignments
+                  {% endif %}
+                </p>
+              </div>
+            </article>
+            {% endfor %}
+          {% else %}
+            <article class="cast-card cast-card--empty">
+              <h2>Matches</h2>
+              <p class="cast-card__value">Match assignments will appear here as soon as the tournament begins.</p>
+            </article>
+          {% endif %}
+        </section>
+      </aside>
+    </main>
+
+    <script>
+      window.CAST_STATE = {{ cast_state | tojson }};
+    </script>
+    <script src="{{ request.url_for('static', path='js/cast.js') }}" defer></script>
+  </body>
+</html>

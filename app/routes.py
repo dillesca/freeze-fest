@@ -68,6 +68,8 @@ logger = logging.getLogger(__name__)
 USE_GCS_PHOTOS = gcs_photos_enabled()
 EVENT_GALLERY_PREVIEW_LIMIT = 12
 CAST_PHOTO_LIMIT = 40
+CAST_APP_ID = os.getenv("CAST_APP_ID")
+CAST_SENDER_ENABLED = bool(CAST_APP_ID)
 
 
 def _ensure_upload_dir() -> None:
@@ -146,6 +148,8 @@ def _render(
     status_code: int | None = None,
 ) -> HTMLResponse:
     payload = dict(context)
+    payload.setdefault("cast_app_id", CAST_APP_ID)
+    payload.setdefault("cast_sender_enabled", CAST_SENDER_ENABLED)
     payload["is_admin"] = _is_admin(request)
     response = templates.TemplateResponse(request, template_name, payload)
     if status_code is not None:
