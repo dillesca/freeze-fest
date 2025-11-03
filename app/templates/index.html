@@ -70,8 +70,8 @@
             <label for="rsvp-food-restrictions">Food Restrictions</label>
             <input id="rsvp-food-restrictions" name="food_restrictions" type="text" tabindex="-1" autocomplete="off" />
           </div>
-          <label for="rsvp-name">Full name</label>
-          <input id="rsvp-name" name="name" type="text" required maxlength="100" placeholder="Alex Snow" />
+          <label for="rsvp-name">Name</label>
+          <input id="rsvp-name" name="name" type="text" required maxlength="100" placeholder="Freeziest Person" />
 
           <label for="rsvp-guests">How many in your party?</label>
           <input id="rsvp-guests" name="guests" type="number" min="1" value="1" required />
@@ -140,7 +140,7 @@
                   <label for="rsvp-update-food-restrictions-{{ entry.id }}">Food Restrictions</label>
                   <input id="rsvp-update-food-restrictions-{{ entry.id }}" name="food_restrictions" type="text" tabindex="-1" autocomplete="off" />
                 </div>
-                <label for="rsvp-edit-name-{{ entry.id }}">Full name</label>
+                <label for="rsvp-edit-name-{{ entry.id }}">Name</label>
                 <input id="rsvp-edit-name-{{ entry.id }}" name="name" type="text" value="{{ entry.name }}" required minlength="1" maxlength="100" />
 
                 <label for="rsvp-edit-guests-{{ entry.id }}">Guests</label>

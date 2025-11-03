@@ -312,13 +312,13 @@ body {
 
 .cast-layout {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
-  gap: clamp(1.5rem, 3.5vw, 3rem);
+  grid-template-columns: minmax(0, 1.4fr) minmax(380px, 1.1fr);
+  gap: clamp(1.5rem, 3vw, 2.5rem);
   padding: clamp(1.5rem, 3.5vw, 3rem);
   height: 100vh;
   box-sizing: border-box;
   align-items: stretch;
-  max-width: 1600px;
+  max-width: 1500px;
   margin: 0 auto;
 }
 
@@ -406,11 +406,12 @@ body {
 
 .cast-games {
   display: grid;
-  gap: 0.85rem;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-auto-rows: min-content;
   align-content: start;
   overflow-y: auto;
-  padding-right: 0.5rem;
+  padding-right: 0.35rem;
 }
 
 .cast-card {

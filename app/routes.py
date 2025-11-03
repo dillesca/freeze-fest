@@ -71,6 +71,7 @@ MAX_OPEN_MATCHES_PER_GAME = {
     "Bucket Golf": 2,
     "Bucket Golf Semifinal": 1,
 }
+BUCKET_POOL_OPTIMIZER_LIMIT = 10
 
 logger = logging.getLogger(__name__)
 USE_GCS_PHOTOS = gcs_photos_enabled()
@@ -2040,6 +2041,7 @@ def _ensure_matches(
     name_to_team = {team.name: team for team in teams}
     id_to_name = {team.id: team.name for team in teams}
     team_ids = [team.id for team in teams]
+    needs_optimizer = bucket_pool_mode and len(team_ids) <= BUCKET_POOL_OPTIMIZER_LIMIT
     trio_mode = len(teams) == 3
 
     def select_slot(game_lists: dict[str, list[dict[str, str | None]]], game_order: list[str]) -> list[tuple[str, int]]:
@@ -2335,9 +2337,17 @@ def _ensure_matches(
             session.commit()
             return session.exec(select(Match).where(Match.event_id == event.id)).all()
 
+    elif bucket_pool_mode:
+        logger.info(
+            "Skipping optimal bucket-pool scheduler for %s teams (limit %s); using greedy fallback.",
+            len(team_ids),
+            BUCKET_POOL_OPTIMIZER_LIMIT,
+        )
+
     schedule = generate_schedule(participants)
     order = 1
     pending_matches: list[Match] = []
+    bye_tracker: dict[str, list[int]] = defaultdict(list)
 
     for block in schedule:
         if block["game"] == "Bucket Golf" and bucket_pool_mode:
@@ -2377,6 +2387,11 @@ def _ensure_matches(
             team1_name = matchup.get("team1")
             team2_name = matchup.get("team2")
             if not team1_name or not team2_name:
+                solo_name = team1_name or team2_name
+                if solo_name:
+                    solo_team = name_to_team.get(solo_name)
+                    if solo_team:
+                        bye_tracker[block["game"]].append(solo_team.id)
                 continue
             team1 = name_to_team.get(team1_name)
             team2 = name_to_team.get(team2_name)
@@ -2392,6 +2407,52 @@ def _ensure_matches(
                 )
             )
             order += 1
+
+    if bucket_pool_mode and len(team_ids) > BUCKET_POOL_OPTIMIZER_LIMIT and len(teams) % 2 == 1:
+        per_game_counts: dict[str, defaultdict[int, int]] = {game: defaultdict(int) for game in GAMES}
+        for match in pending_matches:
+            per_game_counts[match.game][match.team1_id] += 1
+            if match.team2_id != match.team1_id:
+                per_game_counts[match.game][match.team2_id] += 1
+
+        def _add_match(game_name: str, team1_id: int, team2_id: int) -> None:
+            nonlocal order
+            pending_matches.append(
+                Match(
+                    event_id=event.id,
+                    game=game_name,
+                    order_index=order,
+                    team1_id=team1_id,
+                    team2_id=team2_id,
+                )
+            )
+            per_game_counts[game_name][team1_id] += 1
+            per_game_counts[game_name][team2_id] += 1
+            order += 1
+
+        coverage_games = [game for game in GAMES if game != "Bucket Golf"]
+        for game in coverage_games:
+            missing_ids = [team.id for team in teams if per_game_counts[game].get(team.id, 0) == 0]
+            while len(missing_ids) >= 2:
+                _add_match(game, missing_ids.pop(), missing_ids.pop())
+            if missing_ids:
+                solo_id = missing_ids.pop()
+                partner = min(
+                    (team for team in teams if team.id != solo_id),
+                    key=lambda team: (per_game_counts[game].get(team.id, 0), team.id),
+                )
+                _add_match(game, solo_id, partner.id)
+
+        cornhole_byes = bye_tracker.get("Cornhole", [])
+        while len(cornhole_byes) >= 2:
+            _add_match("KanJam", cornhole_byes.pop(), cornhole_byes.pop())
+        if cornhole_byes:
+            solo_id = cornhole_byes.pop()
+            partner = min(
+                (team for team in teams if team.id != solo_id),
+                key=lambda team: (per_game_counts["KanJam"].get(team.id, 0), team.id),
+            )
+            _add_match("KanJam", solo_id, partner.id)
 
     for match in pending_matches:
         session.add(match)
