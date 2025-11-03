@@ -180,30 +180,43 @@
       playingSection.className = "cast-card__section";
       const playingTitle = document.createElement("h3");
       playingTitle.textContent = "Playing Now";
-      const playingValue = document.createElement("p");
-      playingValue.className = "cast-card__value";
-      playingValue.textContent =
-        game.current
-          ? formatMatch(game.current)
-          : game.remaining === 0
-          ? "All matches complete"
-          : "Waiting for the next teams";
-      playingSection.append(playingTitle, playingValue);
+      playingSection.appendChild(playingTitle);
+
+      const playingSlots = Array.isArray(game.current) ? game.current : game.current ? [game.current] : [];
+      if (playingSlots.length) {
+        const list = document.createElement("ul");
+        list.className = "cast-card__matches";
+        playingSlots.forEach((slot) => {
+          const item = document.createElement("li");
+          item.textContent = formatMatch(slot);
+          list.appendChild(item);
+        });
+        playingSection.appendChild(list);
+      } else {
+        const playingValue = document.createElement("p");
+        playingValue.className = "cast-card__value";
+        playingValue.textContent =
+          game.remaining === 0 ? "All matches complete" : "Waiting for the next teams";
+        playingSection.appendChild(playingValue);
+      }
       card.appendChild(playingSection);
 
       const nextSection = document.createElement("div");
       nextSection.className = "cast-card__section";
       const nextTitle = document.createElement("h3");
       nextTitle.textContent = "On Deck";
-      const nextValue = document.createElement("p");
-      nextValue.className = "cast-card__value";
-      nextValue.textContent =
-        game.next
-          ? formatMatch(game.next)
-          : game.remaining === 0
-          ? "Tournament finished for this game"
-          : "Stand by for assignments";
-      nextSection.append(nextTitle, nextValue);
+      if (game.next) {
+        const nextValue = document.createElement("p");
+        nextValue.className = "cast-card__value";
+        nextValue.textContent = formatMatch(game.next);
+        nextSection.append(nextTitle, nextValue);
+      } else {
+        const nextValue = document.createElement("p");
+        nextValue.className = "cast-card__value";
+        nextValue.textContent =
+          game.remaining === 0 ? "Tournament finished for this game" : "Stand by for assignments";
+        nextSection.append(nextTitle, nextValue);
+      }
       card.appendChild(nextSection);
 
       if (Array.isArray(game.upcoming_queue) && game.upcoming_queue.length) {

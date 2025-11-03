@@ -412,8 +412,10 @@ body {
 
 .cast-semis__header {
   display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .cast-semis__header h2 {
@@ -423,10 +425,11 @@ body {
   text-transform: uppercase;
 }
 
-.cast-semis__header p {
+.cast-semis__note {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   opacity: 0.65;
+  white-space: nowrap;
 }
 
 .cast-semis__list {
@@ -470,14 +473,14 @@ body {
 
 .cast-semis__name {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 600;
 }
 
 .cast-semis__meta {
   margin: 0.15rem 0 0;
-  font-size: 0.8rem;
-  opacity: 0.7;
+  font-size: 0.75rem;
+  opacity: 0.65;
 }
 
 .cast-info__logo img {
@@ -529,6 +532,17 @@ body {
 
 .cast-card__value {
   margin: 0.3rem 0 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.cast-card__matches {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
   font-size: 0.95rem;
   font-weight: 600;
 }

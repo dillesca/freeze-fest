@@ -2592,9 +2592,14 @@ def _cast_state(session: Session) -> dict[str, object]:
         grouped_matches.items(), key=lambda entry: min(match.order_index for match in entry[1])
     ):
         items.sort(key=lambda match: match.order_index)
-        current_match = next((match for match in items if match.status == "in_progress"), None)
+        max_open = MAX_OPEN_MATCHES_PER_GAME.get(game_name, 1)
+        current_matches = [
+            match for match in items if match.status == "in_progress"
+        ][:max_open]
         pending_matches = [
-            match for match in items if match.status == "pending" and (not current_match or match.id != current_match.id)
+            match
+            for match in items
+            if match.status == "pending" and match.id not in {m.id for m in current_matches}
         ]
         next_match = pending_matches[0] if pending_matches else None
         remaining_count = sum(1 for match in items if match.status in {"pending", "in_progress"})
@@ -2602,7 +2607,7 @@ def _cast_state(session: Session) -> dict[str, object]:
         games_payload.append(
             {
                 "game": game_name,
-                "current": _cast_match_payload(current_match, team_lookup),
+                "current": [_cast_match_payload(match, team_lookup) for match in current_matches],
                 "next": _cast_match_payload(next_match, team_lookup),
                 "remaining": remaining_count,
                 "upcoming_queue": [
