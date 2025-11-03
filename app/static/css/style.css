@@ -81,29 +81,27 @@ body {
 }
 
 .cast-launcher {
-  --disconnected-color: rgba(255, 255, 255, 0.85);
-  --inactive-color: rgba(255, 255, 255, 0.5);
+  --disconnected-color: rgba(255, 255, 255, 0.9);
+  --inactive-color: rgba(255, 255, 255, 0.6);
   --connected-color: #1dd15a;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
+  width: 36px;
+  height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: none;
+  border: none;
   cursor: pointer;
-  transition: background 150ms ease, transform 150ms ease;
+  transition: transform 150ms ease;
 }
 
 .cast-launcher:hover,
 .cast-launcher:focus-visible {
-  background: rgba(255, 255, 255, 0.3);
   transform: translateY(-1px);
 }
 
 .cast-launcher:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.65);
+  outline: 2px solid rgba(255, 255, 255, 0.7);
   outline-offset: 2px;
 }
 
@@ -314,30 +312,32 @@ body {
 
 .cast-layout {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
-  gap: clamp(1.5rem, 4vw, 3rem);
-  padding: clamp(1.5rem, 4vw, 3rem);
+  grid-template-columns: minmax(0, 1.65fr) minmax(320px, 1fr);
+  gap: clamp(1.25rem, 3vw, 2.5rem);
+  padding: clamp(1.25rem, 3vw, 2.75rem);
   height: 100vh;
   box-sizing: border-box;
+  align-items: stretch;
 }
 
 .cast-photo {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 1.25rem;
+  justify-content: flex-start;
+  gap: 1rem;
 }
 
 .cast-photo__frame {
   position: relative;
-  border-radius: 28px;
+  border-radius: 24px;
   overflow: hidden;
   background: rgba(10, 16, 26, 0.72);
-  min-height: clamp(320px, 55vh, 720px);
+  min-height: clamp(260px, 40vh, 480px);
+  max-height: clamp(300px, 48vh, 520px);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 35px 60px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 28px 45px rgba(0, 0, 0, 0.42);
 }
 
 .cast-photo__frame::after {
@@ -348,6 +348,7 @@ body {
   pointer-events: none;
 }
 
+.cast-photo__image,
 [data-cast-photo] {
   width: 100%;
   height: 100%;
@@ -369,34 +370,34 @@ body {
 }
 
 .cast-photo__meta {
-  font-size: 1rem;
+  font-size: 0.95rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  opacity: 0.75;
+  opacity: 0.65;
 }
 
 .cast-photo__caption {
   display: inline-block;
-  padding: 0.45rem 0.85rem;
+  padding: 0.35rem 0.75rem;
   border-radius: 999px;
-  background: rgba(12, 28, 58, 0.55);
+  background: rgba(12, 28, 58, 0.48);
   backdrop-filter: blur(6px);
 }
 
 .cast-info {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
 .cast-info__header {
   display: flex;
   align-items: center;
-  gap: 1.25rem;
-  padding: 1.5rem;
-  border-radius: 22px;
-  background: rgba(12, 20, 36, 0.72);
-  box-shadow: 0 24px 45px rgba(0, 0, 0, 0.35);
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: 20px;
+  background: rgba(12, 20, 36, 0.7);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.33);
 }
 
 .cast-info__logo img {
@@ -417,39 +418,41 @@ body {
 }
 
 .cast-info__updated {
-  margin: 0.35rem 0 0;
-  font-size: 0.95rem;
-  opacity: 0.6;
-  letter-spacing: 0.05em;
+  margin: 0.4rem 0 0;
+  font-size: 0.85rem;
+  opacity: 0.55;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .cast-games {
   display: grid;
-  gap: 1.5rem;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  align-content: start;
 }
 
 .cast-card {
   background: rgba(15, 24, 44, 0.74);
-  padding: 1.5rem;
+  padding: 1.25rem;
   border-radius: 20px;
-  box-shadow: 0 22px 40px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.32);
 }
 
 .cast-card h2 {
-  margin: 0 0 0.5rem;
-  font-size: 1.35rem;
+  margin: 0 0 0.35rem;
+  font-size: 1.2rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
 .cast-card__section {
-  margin-top: 1rem;
+  margin-top: 0.75rem;
 }
 
 .cast-card__section h3 {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   opacity: 0.7;
@@ -457,7 +460,7 @@ body {
 
 .cast-card__value {
   margin: 0.35rem 0 0;
-  font-size: 1.2rem;
+  font-size: 1.05rem;
   font-weight: 600;
 }
 
@@ -490,10 +493,12 @@ body {
   .cast-layout {
     grid-template-columns: 1fr;
     height: auto;
+    gap: 2rem;
   }
 
   .cast-photo__frame {
-    min-height: clamp(300px, 45vh, 560px);
+    min-height: clamp(280px, 50vh, 460px);
+    max-height: clamp(320px, 55vh, 520px);
   }
 
   .cast-info__header {
@@ -512,7 +517,7 @@ body {
   }
 
   .cast-card__value {
-    font-size: 1.05rem;
+    font-size: 1rem;
   }
 }
 
