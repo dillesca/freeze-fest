@@ -830,6 +830,14 @@ body {
   color: #6d160f;
 }
 
+.hp-field {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
 .inline-form--danger button {
   background: #c0392b;
 }

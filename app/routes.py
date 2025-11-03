@@ -101,6 +101,7 @@ REVIEW_PATTERNS = [
     ]
 ]
 MAX_TEXT_LENGTH = 100
+HONEYPOT_FIELD_NAME = "food_restrictions"
 
 
 def _ensure_upload_dir() -> None:
@@ -224,6 +225,22 @@ def _team_display_name(session: Session, team_identifier: int | None) -> str:
         return "-- No team --"
     team = session.get(Team, team_identifier)
     return team.name if team else f"Team #{team_identifier}"
+
+
+def _honeypot_tripped(value: str | None) -> bool:
+    return bool(value and value.strip())
+
+
+def _honeypot_redirect(
+    request: Request,
+    *,
+    destination: str,
+    query: str,
+    message: str,
+) -> RedirectResponse:
+    logger.warning("Honeypot triggered for %s: %s", destination, message)
+    target = str(request.url_for(destination)) + query
+    return RedirectResponse(target, status_code=303)
 
 
 def _pending_updates(
@@ -603,7 +620,16 @@ async def submit_rsvp(
     name: str = Form(..., max_length=MAX_TEXT_LENGTH),
     guests: int = Form(default=1),
     message: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
+    food_restrictions: str = Form(default=""),
 ):
+    if _honeypot_tripped(food_restrictions):
+        return _honeypot_redirect(
+            request,
+            destination="index",
+            query="?rsvp=saved",
+            message="RSVP honeypot triggered",
+        )
+
     event = get_active_event(session)
     trimmed_name = name.strip()
     cleaned_message = message.strip() if message else None
@@ -653,6 +679,7 @@ async def update_rsvp(
     name: str = Form(..., max_length=MAX_TEXT_LENGTH),
     guests: int = Form(...),
     message: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
+    food_restrictions: str = Form(default=""),
 ):
     rsvp = session.get(RSVP, rsvp_id)
     if not rsvp:
@@ -662,6 +689,14 @@ async def update_rsvp(
     original_guests = rsvp.guests
     original_message = rsvp.message
     original_status = rsvp.status
+
+    if _honeypot_tripped(food_restrictions):
+        return _honeypot_redirect(
+            request,
+            destination="index",
+            query="?rsvp=updated",
+            message=f"RSVP update honeypot (id={rsvp_id})",
+        )
 
     trimmed_name = name.strip()
     cleaned_message = message.strip() if message else None
@@ -1010,7 +1045,16 @@ async def create_team(
     name: str = Form(default="", max_length=MAX_TEXT_LENGTH),
     member_one: str = Form(default="", max_length=MAX_TEXT_LENGTH),
     member_two: str = Form(default="", max_length=MAX_TEXT_LENGTH),
+    food_restrictions: str = Form(default=""),
 ):
+    if _honeypot_tripped(food_restrictions):
+        return _honeypot_redirect(
+            request,
+            destination="team_directory",
+            query="?team=created",
+            message="Team create honeypot",
+        )
+
     cleaned = name.strip()
     first_player = member_one.strip() or None
     second_player = member_two.strip() or None
@@ -1076,6 +1120,7 @@ async def update_team(
     name: str = Form(..., max_length=MAX_TEXT_LENGTH),
     member_one: str = Form(..., max_length=MAX_TEXT_LENGTH),
     member_two: str = Form(..., max_length=MAX_TEXT_LENGTH),
+    food_restrictions: str = Form(default=""),
 ):
     team = session.get(Team, team_id)
     if not team:
@@ -1085,6 +1130,14 @@ async def update_team(
     original_member_one = team.member_one
     original_member_two = team.member_two
     original_status = team.status
+
+    if _honeypot_tripped(food_restrictions):
+        return _honeypot_redirect(
+            request,
+            destination="team_directory",
+            query="?team=updated",
+            message=f"Team update honeypot (id={team_id})",
+        )
 
     cleaned = name.strip()
     first_player = member_one.strip() or None
@@ -1271,7 +1324,16 @@ async def register_free_agent(
     name: str = Form(..., max_length=MAX_TEXT_LENGTH),
     email: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
     note: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
+    food_restrictions: str = Form(default=""),
 ):
+    if _honeypot_tripped(food_restrictions):
+        return _honeypot_redirect(
+            request,
+            destination="team_directory",
+            query="?free_agent=added",
+            message="Free-agent create honeypot",
+        )
+
     trimmed_name = name.strip()
     trimmed_email = email.strip() if email else None
     cleaned_note = note.strip() if note else None
@@ -1362,6 +1424,7 @@ async def update_free_agent(
     note: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
     team_id: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
     pair_with: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
+    food_restrictions: str = Form(default=""),
 ):
     agent = session.get(FreeAgent, agent_id)
     if not agent:
@@ -1372,6 +1435,14 @@ async def update_free_agent(
     original_status = agent.status
     original_team_id = agent.team_id
     original_moderation = agent.moderation_status
+
+    if _honeypot_tripped(food_restrictions):
+        return _honeypot_redirect(
+            request,
+            destination="team_directory",
+            query="?free_agent=updated",
+            message=f"Free-agent update honeypot (id={agent_id})",
+        )
 
     trimmed_name = name.strip()
     cleaned_note = note.strip() if note else None

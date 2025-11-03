@@ -12,7 +12,8 @@ TEST_DB = Path(tempfile.gettempdir()) / "freeze_fest_test_app.sqlite3"
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB}"
 
 from app import app  # noqa: E402
-from app.database import Event, engine, init_db  # noqa: E402
+from app.database import Event, RSVP, engine, init_db  # noqa: E402
+from app.routes import HONEYPOT_FIELD_NAME  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -46,3 +47,22 @@ def test_events_seeded():
     slugs = {event.slug for event in events}
     assert "2025" in slugs
     assert "2024" in slugs
+
+
+@pytest.mark.asyncio
+async def test_rsvp_honeypot_skips_insert(async_client):
+    payload = {
+        "name": "Sneaky Bot",
+        "guests": "1",
+        HONEYPOT_FIELD_NAME: "totally harmless text",
+    }
+
+    response = await async_client.post("/rsvp", data=payload, follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "http://testserver/?rsvp=saved"
+
+    with Session(engine) as session:
+        rsvps = session.exec(select(RSVP)).all()
+
+    assert rsvps == []

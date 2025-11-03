@@ -66,6 +66,10 @@
         <h2>RSVP</h2>
         <p>Let us know you’re coming so we can prep heats, scorecards, and refreshments.</p>
         <form method="post" action="{{ request.url_for('submit_rsvp') }}" class="rsvp-form">
+          <div class="hp-field" aria-hidden="true">
+            <label for="rsvp-food-restrictions">Food Restrictions</label>
+            <input id="rsvp-food-restrictions" name="food_restrictions" type="text" tabindex="-1" autocomplete="off" />
+          </div>
           <label for="rsvp-name">Full name</label>
           <input id="rsvp-name" name="name" type="text" required maxlength="100" placeholder="Alex Snow" />
 
@@ -132,6 +136,10 @@
             <details class="inline-editor">
               <summary>Manage RSVP</summary>
               <form method="post" action="{{ request.url_for('update_rsvp', rsvp_id=entry.id) }}" class="inline-form">
+                <div class="hp-field" aria-hidden="true">
+                  <label for="rsvp-update-food-restrictions-{{ entry.id }}">Food Restrictions</label>
+                  <input id="rsvp-update-food-restrictions-{{ entry.id }}" name="food_restrictions" type="text" tabindex="-1" autocomplete="off" />
+                </div>
                 <label for="rsvp-edit-name-{{ entry.id }}">Full name</label>
                 <input id="rsvp-edit-name-{{ entry.id }}" name="name" type="text" value="{{ entry.name }}" required minlength="1" maxlength="100" />
 

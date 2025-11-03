@@ -56,6 +56,10 @@
           Teams compete in pairs — one partner and one partner only. Pick a name that represents both of you, then submit!
         </p>
         <form method="post" action="{{ request.url_for('create_team') }}" class="participants-form team-form">
+          <div class="hp-field" aria-hidden="true">
+            <label for="team-food-restrictions">Food Restrictions</label>
+            <input id="team-food-restrictions" name="food_restrictions" type="text" tabindex="-1" autocomplete="off" />
+          </div>
           <label for="team-name">Team name</label>
           <input
             id="team-name"
@@ -111,6 +115,10 @@
           Flying solo? Join the pool and we'll auto-match you with the next available player to create a new team.
         </p>
         <form method="post" action="{{ request.url_for('register_free_agent') }}" class="participants-form team-form">
+          <div class="hp-field" aria-hidden="true">
+            <label for="free-agent-food-restrictions">Food Restrictions</label>
+            <input id="free-agent-food-restrictions" name="food_restrictions" type="text" tabindex="-1" autocomplete="off" />
+          </div>
           <label for="free-agent-name">Full name</label>
           <input id="free-agent-name" name="name" type="text" required maxlength="100" placeholder="Taylor Frost" />
 
@@ -142,6 +150,10 @@
             <details class="inline-editor">
               <summary>Manage {{ agent.name }}</summary>
               <form method="post" action="{{ request.url_for('update_free_agent', agent_id=agent.id) }}" class="inline-form">
+                <div class="hp-field" aria-hidden="true">
+                  <label for="pending-agent-food-restrictions-{{ agent.id }}">Food Restrictions</label>
+                  <input id="pending-agent-food-restrictions-{{ agent.id }}" name="food_restrictions" type="text" tabindex="-1" autocomplete="off" />
+                </div>
                 <label for="agent-name-{{ agent.id }}">Full name</label>
                 <input id="agent-name-{{ agent.id }}" name="name" type="text" value="{{ agent.name }}" required minlength="1" maxlength="100" />
 
@@ -207,6 +219,10 @@
             <details class="inline-editor">
               <summary>Manage {{ agent.name }}</summary>
               <form method="post" action="{{ request.url_for('update_free_agent', agent_id=agent.id) }}" class="inline-form">
+                <div class="hp-field" aria-hidden="true">
+                  <label for="paired-agent-food-restrictions-{{ agent.id }}">Food Restrictions</label>
+                  <input id="paired-agent-food-restrictions-{{ agent.id }}" name="food_restrictions" type="text" tabindex="-1" autocomplete="off" />
+                </div>
                 <label for="agent-name-{{ agent.id }}">Full name</label>
                 <input id="agent-name-{{ agent.id }}" name="name" type="text" value="{{ agent.name }}" required minlength="1" maxlength="100" />
 
@@ -280,6 +296,10 @@
             <details class="inline-editor">
               <summary>Manage {{ team.name }}</summary>
               <form method="post" action="{{ request.url_for('update_team', team_id=team.id) }}" class="inline-form">
+                <div class="hp-field" aria-hidden="true">
+                  <label for="team-update-food-restrictions-{{ team.id }}">Food Restrictions</label>
+                  <input id="team-update-food-restrictions-{{ team.id }}" name="food_restrictions" type="text" tabindex="-1" autocomplete="off" />
+                </div>
                 <label for="team-edit-name-{{ team.id }}">Team name</label>
                 <input
                   id="team-edit-name-{{ team.id }}"
