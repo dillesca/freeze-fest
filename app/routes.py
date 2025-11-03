@@ -98,6 +98,20 @@ REVIEW_PATTERNS = [
         r"<[^>]+>",
         r"\bseo\b",
         r"\bviagra\b",
+        r"\bcasino\b",
+        r"\bloan\b",
+        r"\bcredit repair\b",
+        r"\bescort\b",
+        r"\bcrypto\b",
+        r"\binvest\b",
+        r"\.(?:ru|cn|xyz|info)\b",
+        r"\b(?:bit\.ly|t\.co|tinyurl\.com)\b",
+        r"\+\d{1,3}[\s-]?\d{8,}",
+        r"free\s+money",
+        r"work\s*from\s*home",
+        r"investment opportunity",
+        r"[!?.]{4,}",
+        r"[€¥£$]{2,}",
     ]
 ]
 MAX_TEXT_LENGTH = 100
