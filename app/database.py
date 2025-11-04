@@ -406,6 +406,10 @@ def _ensure_team_name_index() -> None:
             )
             existing_indexes = {row[0] for row in index_rows}
 
+            if "ix_team_name" in existing_constraints:
+                conn.exec_driver_sql("ALTER TABLE team DROP CONSTRAINT ix_team_name")
+            elif "ix_team_name" in existing_indexes:
+                conn.exec_driver_sql("DROP INDEX IF EXISTS ix_team_name")
             if "team_name_key" in existing_constraints:
                 conn.exec_driver_sql("ALTER TABLE team DROP CONSTRAINT team_name_key")
             if "team_event_name_unique" not in existing_constraints and "team_event_name_unique" not in existing_indexes:

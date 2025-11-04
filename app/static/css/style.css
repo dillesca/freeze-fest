@@ -393,6 +393,18 @@ body {
   box-shadow: 0 16px 30px rgba(0, 0, 0, 0.28);
 }
 
+.cast-info__header--stacked {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  text-align: center;
+}
+
+.cast-info__header--stacked .cast-info__titles {
+  width: 100%;
+  text-align: center;
+}
+
 .cast-info__summary {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr);
@@ -455,7 +467,7 @@ body {
 
 .cast-semis__rank {
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 0.95rem;
   color: #7cd5ff;
   min-width: 2rem;
   text-align: center;
@@ -463,30 +475,68 @@ body {
 
 .cast-semis__body {
   flex: 1;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   padding-bottom: 0.25rem;
+}
+
+.cast-semis__headline {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cast-semis__name {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  text-align: center;
+  gap: 0.1rem;
+}
+
+.cast-semis__name-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.cast-semis__name p.cast-semis__golf {
+  font-size: 0.65rem;
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+.cast-semis__record {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
 }
 
 .cast-semis__item:last-child .cast-semis__body {
   border-bottom: none;
 }
 
-.cast-semis__name {
-  margin: 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
 .cast-semis__meta {
   margin: 0.15rem 0 0;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   opacity: 0.65;
+}
+
+.cast-semis__meta.cast-semis__golf {
+  font-size: 0.65rem;
+  font-weight: 400;
+  opacity: 0.8;
+  margin-top: 0.05rem;
 }
 
 .cast-info__logo img {
   width: clamp(64px, 7vw, 96px);
   height: auto;
   filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.4));
+  display: block;
+  margin: 0 auto;
 }
 
 .cast-info__titles h1 {
@@ -1523,6 +1573,21 @@ body {
   padding: 0.45rem 1.2rem;
   font-weight: 600;
   cursor: pointer;
+}
+
+.match-score-form--bucket {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.match-score-list {
+  margin: 0.35rem 0 0;
+  padding-left: 1rem;
+  font-size: 0.85rem;
+}
+
+.match-score-list li {
+  margin: 0;
 }
 
 .match-order {

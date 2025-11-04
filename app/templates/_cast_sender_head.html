@@ -8,9 +8,48 @@
       return;
     }
     const context = cast.framework.CastContext.getInstance();
+    let heartbeatIntervalId = null;
+
+    const HEARTBEAT_INTERVAL_MS = 45000;
+    const HEARTBEAT_NAMESPACE = "urn:x-cast:freeze.heartbeat";
+
+    const startHeartbeat = (session) => {
+      stopHeartbeat();
+      if (!session) return;
+      heartbeatIntervalId = window.setInterval(() => {
+        try {
+          session.sendMessage(HEARTBEAT_NAMESPACE, { ping: Date.now() });
+        } catch (error) {
+          console.warn("Cast heartbeat failed:", error);
+        }
+      }, HEARTBEAT_INTERVAL_MS);
+    };
+
+    const stopHeartbeat = () => {
+      if (heartbeatIntervalId) {
+        clearInterval(heartbeatIntervalId);
+        heartbeatIntervalId = null;
+      }
+    };
+
     context.setOptions({
       receiverApplicationId: "{{ cast_app_id }}",
       autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
+    });
+
+    context.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED, (event) => {
+      const session = context.getCurrentSession();
+      if (
+        event.sessionState === cast.framework.SessionState.SESSION_STARTED ||
+        event.sessionState === cast.framework.SessionState.SESSION_RESUMED
+      ) {
+        startHeartbeat(session);
+      } else if (
+        event.sessionState === cast.framework.SessionState.SESSION_ENDING ||
+        event.sessionState === cast.framework.SessionState.SESSION_ENDED
+      ) {
+        stopHeartbeat();
+      }
     });
   };
 </script>

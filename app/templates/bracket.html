@@ -121,7 +121,9 @@
           {% endfor %}
         </ul>
         {% else %}
-        <p class="empty-state">No matches scheduled yet. Add teams to generate the bracket.</p>
+        <p class="empty-state">
+          No matches scheduled yet. Admins can use "Start / Regenerate Bracket" once the team list is ready.
+        </p>
         {% endif %}
       </section>
 
@@ -147,6 +149,67 @@
               </p>
               {% endif %}
             </header>
+            {% if block.game == 'Bucket Golf' and bucket_pool_mode %}
+            <ul class="match-list">
+              {% for group in block.bucket_groups or [block.matches] %}
+              <li class="match-list__item">
+                <div>
+                  <span class="match-order">#{{ group[0].order }}</span>
+                  {% set completed_count = (group | selectattr('status','equalto','completed') | list | length) %}
+                  {% set in_progress_count = (group | selectattr('status','equalto','in_progress') | list | length) %}
+                  {% set all_completed = completed_count == group|length %}
+                  {% set show_admin_form = is_admin and not all_completed and in_progress_count > 0 %}
+                  {% if all_completed %}
+                  {% set status_label = 'Completed' %}
+                  {% elif in_progress_count > 0 %}
+                  {% set status_label = 'In progress' %}
+                  {% else %}
+                  {% set status_label = 'Pending' %}
+                  {% endif %}
+                  <span class="match-status">{{ status_label }}</span>
+                </div>
+                <div class="match-teams">
+                  <span class="team-name">{{ group | map(attribute='team1') | join(' AND ') }}</span>
+                </div>
+                {% if all_completed %}
+                <ul class="match-score-list">
+                  {% for entry in group %}
+                  <li>{{ entry.team1 or 'Team' }}: {{ entry.score1 if entry.score1 is not none else '—' }}</li>
+                  {% endfor %}
+                </ul>
+                {% if is_admin %}
+                  {% for entry in group %}
+                  <details class="inline-editor inline-editor--compact">
+                    <summary>Edit {{ entry.team1 or 'Team' }}</summary>
+                    <form method="post" action="{{ request.url_for('record_score', match_id=entry.id) }}" class="match-score-form">
+                      <label>
+                        {{ entry.team1 or 'Team' }}
+                        <input type="number" name="score_team1" min="0" value="{{ entry.score1 if entry.score1 is not none else '' }}" required />
+                      </label>
+                      <input type="hidden" name="score_team2" value="0" />
+                      <button type="submit">Save score</button>
+                    </form>
+                  </details>
+                  {% endfor %}
+                {% endif %}
+                {% elif show_admin_form %}
+                <form method="post" action="{{ request.url_for('record_bucket_scores') }}" class="match-score-form match-score-form--bucket">
+                  {% for entry in group %}
+                  <input type="hidden" name="match_ids" value="{{ entry.id }}" />
+                  <label>
+                    {{ entry.team1 or 'Team' }}
+                    <input type="number" name="scores" min="0" value="{{ entry.score1 if entry.score1 is not none else '' }}" required />
+                  </label>
+                  {% endfor %}
+                  <button type="submit">Submit score</button>
+                </form>
+                {% else %}
+                <p class="match-note">Waiting for golf scores.</p>
+                {% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+            {% else %}
             <ul class="match-list">
               {% for match in block.matches %}
               <li class="match-list__item">
@@ -155,15 +218,9 @@
                   <span class="match-status">{{ match.status.replace('_', ' ') }}</span>
                 </div>
                 <div class="match-teams">
-                  {% if match.team1_id == match.team2_id and block.game == 'Bucket Golf' %}
-                  <span class="team-name">{{ match.team1 or 'TBD' }}</span>
-                  <span class="match-list__divider">solo run</span>
-                  <span class="team-name">Course</span>
-                  {% else %}
                   <span class="team-name">{{ match.team1 or 'TBD' }}</span>
                   <span class="match-list__divider">vs</span>
                   <span class="team-name">{{ match.team2 or 'TBD' }}</span>
-                  {% endif %}
                 </div>
                 {% if match.status == 'completed' %}
                 <p class="match-score">Final: {{ match.score1 }} – {{ match.score2 }}</p>
@@ -175,14 +232,10 @@
                       {{ match.team1 or 'Team 1' }}
                       <input type="number" name="score_team1" min="0" value="{{ match.score1 if match.score1 is not none else '' }}" required />
                     </label>
-                    {% if match.team1_id == match.team2_id and block.game == 'Bucket Golf' %}
-                    <input type="hidden" name="score_team2" value="{{ match.score2 if match.score2 is not none else 0 }}" />
-                    {% else %}
                     <label>
                       {{ match.team2 or 'Team 2' }}
                       <input type="number" name="score_team2" min="0" value="{{ match.score2 if match.score2 is not none else '' }}" required />
                     </label>
-                    {% endif %}
                     <button type="submit">Save score</button>
                   </form>
                 </details>
@@ -196,14 +249,10 @@
                       {{ match.team1 or 'Team 1' }}
                       <input type="number" name="score_team1" min="0" value="{{ match.score1 if match.score1 is not none else '' }}" required />
                     </label>
-                    {% if match.team1_id == match.team2_id and block.game == 'Bucket Golf' %}
-                    <input type="hidden" name="score_team2" value="0" />
-                    {% else %}
                     <label>
                       {{ match.team2 or 'Team 2' }}
                       <input type="number" name="score_team2" min="0" value="{{ match.score2 if match.score2 is not none else '' }}" required />
                     </label>
-                    {% endif %}
                     <button type="submit">Submit score</button>
                   </form>
                 </details>
@@ -213,14 +262,10 @@
                     {{ match.team1 or 'Team 1' }}
                     <input type="number" name="score_team1" min="0" value="{{ match.score1 if match.score1 is not none else '' }}" required />
                   </label>
-                  {% if match.team1_id == match.team2_id and block.game == 'Bucket Golf' %}
-                  <input type="hidden" name="score_team2" value="0" />
-                  {% else %}
                   <label>
                     {{ match.team2 or 'Team 2' }}
                     <input type="number" name="score_team2" min="0" value="{{ match.score2 if match.score2 is not none else '' }}" required />
                   </label>
-                  {% endif %}
                   <button type="submit">Submit score</button>
                 </form>
                 {% endif %}
@@ -230,6 +275,7 @@
               </li>
               {% endfor %}
             </ul>
+            {% endif %}
           </div>
           {% endfor %}
         </div>

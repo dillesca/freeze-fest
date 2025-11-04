@@ -28,12 +28,12 @@
 
       <aside class="cast-info">
         <div class="cast-info__summary">
-          <header class="cast-info__header">
-            <div class="cast-info__logo">
-              <img src="{{ request.url_for('static', path='img/freezefest.png') }}" alt="Freeze Fest mascot" />
-            </div>
+          <header class="cast-info__header cast-info__header--stacked">
             <div class="cast-info__titles">
               <h1>{{ cast_state.event.name }}</h1>
+            </div>
+            <div class="cast-info__logo">
+              <img src="{{ request.url_for('static', path='img/freezefest.png') }}" alt="Freeze Fest mascot" />
             </div>
           </header>
 
@@ -48,12 +48,31 @@
               <li class="cast-semis__item {% if loop.index <= 4 %}cast-semis__item--qualified{% endif %}">
                 <span class="cast-semis__rank">#{{ loop.index }}</span>
                 <div class="cast-semis__body">
-                  <p class="cast-semis__name">{{ team.name }}</p>
-                  {% if team.score is not none %}
-                  <p class="cast-semis__meta">Score: {{ team.score }}</p>
-                  {% else %}
-                  <p class="cast-semis__meta">{{ team.status.replace('_', ' ') if team.status else 'Pending' }}</p>
-                  {% endif %}
+                  <div class="cast-semis__headline">
+                    <div class="cast-semis__name">
+                      <p class="cast-semis__name-title">{{ team.name }}</p>
+                      {% if cast_state.bucket_pool_mode %}
+                        {% if team.bucket_score is not none %}
+                        <p class="cast-semis__meta cast-semis__golf">Golf Strokes: {{ team.bucket_score }}</p>
+                        {% else %}
+                        <p class="cast-semis__meta cast-semis__golf">Golf incomplete</p>
+                        {% endif %}
+                      {% endif %}
+                    </div>
+                    <div class="cast-semis__record">
+                      {% if team.wins is not none %}
+                      <p class="cast-semis__meta">Win: {{ team.wins }}</p>
+                      <p class="cast-semis__meta">Loss: {{ team.losses }}</p>
+                      {% if team.ties %}
+                      <p class="cast-semis__meta">Ties: {{ team.ties }}</p>
+                      {% endif %}
+                      {% else %}
+                      <p class="cast-semis__meta">Win: --</p>
+                      <p class="cast-semis__meta">Loss: --</p>
+                      <p class="cast-semis__meta">Ties: --</p>
+                      {% endif %}
+                    </div>
+                  </div>
                 </div>
               </li>
               {% endfor %}
@@ -128,6 +147,10 @@
         }
 
         const context = window.cast.framework.CastReceiverContext.getInstance();
+        const heartbeatNamespace = "urn:x-cast:freeze.heartbeat";
+        context.addCustomMessageListener(heartbeatNamespace, () => {
+          // Heartbeat received; no action needed beyond keeping session active.
+        });
         context.setInactivityTimeout(3600);
         context.start({ statusText: "Freeze Fest Live" });
       });
