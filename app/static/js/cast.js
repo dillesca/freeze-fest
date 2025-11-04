@@ -204,34 +204,34 @@
       const nextSection = document.createElement("div");
       nextSection.className = "cast-card__section";
       const nextTitle = document.createElement("h3");
-      nextTitle.textContent = "On Deck";
+      nextTitle.textContent = "Upcoming Games";
+      nextSection.appendChild(nextTitle);
+
+      const upcomingMatches = [];
       if (game.next) {
-        const nextValue = document.createElement("p");
-        nextValue.className = "cast-card__value";
-        nextValue.textContent = formatMatch(game.next);
-        nextSection.append(nextTitle, nextValue);
+        upcomingMatches.push(game.next);
+      }
+      if (Array.isArray(game.upcoming_queue) && game.upcoming_queue.length) {
+        upcomingMatches.push(...game.upcoming_queue);
+      }
+
+      if (upcomingMatches.length) {
+        const queueList = document.createElement("ul");
+        queueList.className = "cast-card__queue";
+        upcomingMatches.forEach((match) => {
+          const item = document.createElement("li");
+          item.textContent = formatMatch(match);
+          queueList.appendChild(item);
+        });
+        nextSection.appendChild(queueList);
       } else {
         const nextValue = document.createElement("p");
         nextValue.className = "cast-card__value";
         nextValue.textContent =
           game.remaining === 0 ? "Tournament finished for this game" : "Stand by for assignments";
-        nextSection.append(nextTitle, nextValue);
+        nextSection.appendChild(nextValue);
       }
       card.appendChild(nextSection);
-
-      if (Array.isArray(game.upcoming_queue) && game.upcoming_queue.length) {
-        const queueHeading = document.createElement("p");
-        queueHeading.className = "cast-card__queue-label";
-        queueHeading.textContent = "Also on deck";
-        const queueList = document.createElement("ul");
-        queueList.className = "cast-card__queue";
-        game.upcoming_queue.forEach((match) => {
-          const item = document.createElement("li");
-          item.textContent = formatMatch(match);
-          queueList.appendChild(item);
-        });
-        card.append(queueHeading, queueList);
-      }
 
       gamesContainer.appendChild(card);
     });

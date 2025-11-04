@@ -393,7 +393,7 @@ async def start_tournament(request: Request, session: Session = Depends(get_sess
         redirect_url = str(request.url_for("bracket")) + "?tournament=needs-teams"
         return RedirectResponse(redirect_url, status_code=303)
 
-    _clear_event_matches(session, event.id, keep_playoffs=True)
+    _clear_event_matches(session, event.id, keep_playoffs=False)
     session.commit()
 
     bucket_pool_mode = _needs_bucket_pool(len(teams))
@@ -1119,9 +1119,10 @@ async def create_team(
     error: str | None = None
     event = get_active_event(session)
     is_admin = _is_admin(request)
+    bracket_locked = _tournament_locked(session, event.id)
 
-    if _tournament_locked(session, event.id) and not is_admin:
-        error = "Tournament already in progress. Ask an organizer to manage roster changes."
+    if bracket_locked and not is_admin:
+        error = "Bracket already has reported scores. Adding a team now would require regenerating the entire schedule."
     elif len(cleaned) < 2:
         error = "Team names must be at least two characters long."
     elif len(cleaned) > MAX_TEXT_LENGTH:
@@ -1290,6 +1291,9 @@ async def delete_team(request: Request, team_id: int, session: Session = Depends
 
     event_id = team.event_id
     is_admin = _is_admin(request)
+    if _team_is_committed(session, event_id, team_id) and not is_admin:
+        redirect_url = str(request.url_for("team_directory")) + "?team=locked"
+        return RedirectResponse(redirect_url, status_code=303)
     if _tournament_locked(session, event_id) and not is_admin:
         redirect_url = str(request.url_for("team_directory")) + "?team=locked"
         return RedirectResponse(redirect_url, status_code=303)
@@ -1921,6 +1925,20 @@ def _needs_bucket_pool(team_count: int) -> bool:
     return team_count < len(GAMES) + 1 or team_count % 2 == 1
 
 
+def _team_is_committed(session: Session, event_id: int, team_id: int) -> bool:
+    return (
+        session.exec(
+            select(Match.id)
+            .where(
+                (Match.event_id == event_id)
+                & ((Match.team1_id == team_id) | (Match.team2_id == team_id))
+            )
+            .limit(1)
+        ).first()
+        is not None
+    )
+
+
 def _tournament_locked(session: Session, event_id: int) -> bool:
     scored_match = session.exec(
         select(Match.id)
@@ -2285,6 +2303,8 @@ def _ensure_matches(
                 if team2_id != team1.id:
                     ids.add(team2_id)
                 if ids & last_slot_teams:
+                    continue
+                if ids & used_ids:
                     continue
                 slot.append((game, team1.id, team2_id))
                 used_ids.add(team1.id)
@@ -2695,15 +2715,19 @@ def _cast_state(session: Session) -> dict[str, object]:
         next_match = pending_matches[0] if pending_matches else None
         remaining_count = sum(1 for match in items if match.status in {"pending", "in_progress"})
 
+        upcoming_matches = []
+        for match in pending_matches:
+            upcoming_matches.append(_cast_match_payload(match, team_lookup))
+            if len(upcoming_matches) == 3:
+                break
+
         games_payload.append(
             {
                 "game": game_name,
                 "current": [_cast_match_payload(match, team_lookup) for match in current_matches],
                 "next": _cast_match_payload(next_match, team_lookup),
                 "remaining": remaining_count,
-                "upcoming_queue": [
-                    _cast_match_payload(match, team_lookup) for match in pending_matches[1:3]
-                ],
+                "upcoming_queue": upcoming_matches[1:],
             }
         )
 
