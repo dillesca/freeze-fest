@@ -94,6 +94,17 @@
           <div class="event-gallery__masonry">
             {% for photo in photos %}
             <figure class="event-gallery__item">
+              {% if is_admin %}
+              <form
+                method="post"
+                action="{{ request.url_for('delete_photo', photo_id=photo.id) }}"
+                class="event-gallery__delete"
+                onsubmit="return confirm('Delete this photo?');"
+              >
+                <input type="hidden" name="next" value="{{ current_target }}" />
+                <button type="submit" class="event-gallery__delete-button">Delete</button>
+              </form>
+              {% endif %}
               <img
                 src="{{ photo.image_url }}"
                 alt="Photo from {{ event.name }}"

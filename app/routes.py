@@ -57,6 +57,7 @@ from .storage import (
     is_gcs_identifier,
     make_gcs_identifier,
     upload_photo_stream,
+    GCS_PHOTO_BUCKET,
 )
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -547,7 +548,9 @@ async def start_playoffs(request: Request, session: Session = Depends(get_sessio
 
 @router.get("/photos", response_class=HTMLResponse, name="photos")
 async def photos_page(request: Request, session: Session = Depends(get_session)):
-    success = request.query_params.get("photo") == "saved"
+    status_flag = request.query_params.get("photo")
+    success = status_flag == "saved"
+    deleted = status_flag == "deleted"
     count_param = request.query_params.get("count")
     try:
         success_count = int(count_param) if count_param is not None else None
@@ -555,7 +558,13 @@ async def photos_page(request: Request, session: Session = Depends(get_session))
         success_count = None
     if not success:
         success_count = None
-    context = _photo_context(session, photo_success=success, photo_success_count=success_count)
+    context = _photo_context(
+        session,
+        photo_success=success,
+        photo_success_count=success_count,
+        photo_deleted=deleted,
+        is_admin=_is_admin(request),
+    )
     return _render(request, "photos.html", context)
 
 
@@ -890,7 +899,11 @@ async def upload_photo(
     event = get_active_event(session)
 
     if not images:
-        context = _photo_context(session, photo_error="Select at least one image to upload.")
+        context = _photo_context(
+            session,
+            photo_error="Select at least one image to upload.",
+            is_admin=_is_admin(request),
+        )
         return _render(request, "photos.html", context, status_code=400)
 
     allowed_suffixes = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".heif"}
@@ -945,7 +958,11 @@ async def upload_photo(
         )
 
     if not prepared:
-        context = _photo_context(session, photo_error=" ".join(errors))
+        context = _photo_context(
+            session,
+            photo_error=" ".join(errors),
+            is_admin=_is_admin(request),
+        )
         return _render(request, "photos.html", context, status_code=400)
 
     successes = 0
@@ -991,10 +1008,37 @@ async def upload_photo(
             photo_error=error_msg,
             photo_success=successes > 0,
             photo_success_count=successes if successes else None,
+            is_admin=_is_admin(request),
         )
         return _render(request, "photos.html", context, status_code=207 if successes else 500)
 
     redirect_url = str(request.url_for("photos")) + f"?photo=saved&count={successes}"
+    return RedirectResponse(redirect_url, status_code=303)
+
+
+@router.post("/photos/{photo_id}/delete", response_class=HTMLResponse, name="delete_photo")
+async def delete_photo(
+    request: Request,
+    photo_id: int,
+    session: Session = Depends(get_session),
+    next: str | None = Form(default=None, max_length=MAX_TEXT_LENGTH),
+):
+    if not _is_admin(request):
+        return _admin_redirect(request)
+    photo = session.get(Photo, photo_id)
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found")
+
+    filename = photo.filename
+    session.delete(photo)
+    session.commit()
+    _delete_photo_asset(filename)
+
+    redirect_path = _sanitize_next(next) if next else None
+    if redirect_path:
+        redirect_url = _absolute_next(request, redirect_path)
+    else:
+        redirect_url = str(request.url_for("photos")) + "?photo=deleted"
     return RedirectResponse(redirect_url, status_code=303)
 
 
@@ -1796,6 +1840,8 @@ def _photo_context(
     photo_error: str | None = None,
     photo_success: bool = False,
     photo_success_count: int | None = None,
+    photo_deleted: bool = False,
+    is_admin: bool = False,
 ) -> dict[str, object]:
     event = get_active_event(session)
     photos = [_photo_payload(photo) for photo in _fetch_photos(session, event.id)]
@@ -1805,6 +1851,8 @@ def _photo_context(
         "photo_error": photo_error,
         "photo_success": photo_success,
         "photo_success_count": photo_success_count,
+        "photo_deleted": photo_deleted,
+        "is_admin": is_admin,
     }
 
 
@@ -2505,6 +2553,36 @@ def _photo_image_url(filename: str) -> str:
                 return f"https://storage.googleapis.com/{base}/{object_name}"
             return object_name
     return f"/static/uploads/{identifier}"
+
+
+def _delete_photo_asset(filename: str | None) -> None:
+    if not filename:
+        return
+    if is_gcs_identifier(filename):
+        if not gcs_photos_enabled() or not GCS_PHOTO_BUCKET:
+            return
+        object_name = extract_object_name(filename).lstrip("/")
+        try:
+            from google.cloud import storage
+        except ImportError:
+            logger.warning("Unable to delete GCS photo %s: google-cloud-storage not installed.", object_name)
+            return
+        try:
+            client = storage.Client()
+            bucket = client.bucket(GCS_PHOTO_BUCKET)
+            blob = bucket.blob(object_name)
+            blob.delete()
+        except Exception as exc:  # pragma: no cover - best effort cleanup
+            logger.warning("Failed to delete GCS photo %s: %s", object_name, exc)
+        return
+
+    target_path = UPLOAD_DIR / filename
+    try:
+        target_path.unlink()
+    except FileNotFoundError:
+        return
+    except OSError as exc:  # pragma: no cover - best effort cleanup
+        logger.warning("Failed to delete local photo %s: %s", target_path, exc)
 
 
 def _photo_payload(photo: Photo) -> dict[str, object]:

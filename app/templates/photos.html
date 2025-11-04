@@ -54,6 +54,16 @@
         <div class="photo-gallery">
           {% for photo in photos %}
           <figure class="photo-gallery__item">
+            {% if is_admin %}
+            <form
+              method="post"
+              action="{{ request.url_for('delete_photo', photo_id=photo.id) }}"
+              class="photo-gallery__delete"
+              onsubmit="return confirm('Delete this photo?');"
+            >
+              <button type="submit" class="photo-gallery__delete-button">Delete</button>
+            </form>
+            {% endif %}
             <img
               src="{{ photo.image_url }}"
               alt="Freeze Fest photo uploaded on {{ photo.created_at.strftime('%b %d, %Y %I:%M %p') }}"
@@ -92,6 +102,9 @@
           Photo uploaded!
           {% endif %}
         </p>
+        {% endif %}
+        {% if photo_deleted %}
+        <p class="form-success">Photo removed.</p>
         {% endif %}
       </section>
     </main>
