@@ -158,7 +158,7 @@
                   {% set completed_count = (group | selectattr('status','equalto','completed') | list | length) %}
                   {% set in_progress_count = (group | selectattr('status','equalto','in_progress') | list | length) %}
                   {% set all_completed = completed_count == group|length %}
-                  {% set show_admin_form = is_admin and not all_completed and in_progress_count > 0 %}
+                  {% set allow_group_submission = (not all_completed) and in_progress_count > 0 %}
                   {% if all_completed %}
                   {% set status_label = 'Completed' %}
                   {% elif in_progress_count > 0 %}
@@ -192,7 +192,7 @@
                   </details>
                   {% endfor %}
                 {% endif %}
-                {% elif show_admin_form %}
+                {% elif allow_group_submission %}
                 <form method="post" action="{{ request.url_for('record_bucket_scores') }}" class="match-score-form match-score-form--bucket">
                   {% for entry in group %}
                   <input type="hidden" name="match_ids" value="{{ entry.id }}" />

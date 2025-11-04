@@ -1072,6 +1072,8 @@ async def team_directory(request: Request, session: Session = Depends(get_sessio
         context["success_message"] = "Thanks! Your team will appear once an organizer approves it."
     elif team_status == "too-long":
         context["form_error"] = f"Team and player names must be {MAX_TEXT_LENGTH} characters or fewer."
+    elif team_status == "locked":
+        context["form_error"] = "Tournament is underway. Contact an organizer to adjust teams."
 
     flag = request.query_params.get("free_agent")
     if flag == "added":
@@ -1116,8 +1118,11 @@ async def create_team(
     second_player = member_two.strip() or None
     error: str | None = None
     event = get_active_event(session)
+    is_admin = _is_admin(request)
 
-    if len(cleaned) < 2:
+    if _tournament_locked(session, event.id) and not is_admin:
+        error = "Tournament already in progress. Ask an organizer to manage roster changes."
+    elif len(cleaned) < 2:
         error = "Team names must be at least two characters long."
     elif len(cleaned) > MAX_TEXT_LENGTH:
         error = f"Team names must be {MAX_TEXT_LENGTH} characters or fewer."
@@ -1284,6 +1289,11 @@ async def delete_team(request: Request, team_id: int, session: Session = Depends
         raise HTTPException(status_code=404, detail="Team not found")
 
     event_id = team.event_id
+    is_admin = _is_admin(request)
+    if _tournament_locked(session, event_id) and not is_admin:
+        redirect_url = str(request.url_for("team_directory")) + "?team=locked"
+        return RedirectResponse(redirect_url, status_code=303)
+
     agents = session.exec(select(FreeAgent).where(FreeAgent.team_id == team.id)).all()
     for agent in agents:
         agent.team_id = None
@@ -1909,6 +1919,18 @@ def _needs_bucket_pool(team_count: int) -> bool:
     if team_count <= 0:
         return False
     return team_count < len(GAMES) + 1 or team_count % 2 == 1
+
+
+def _tournament_locked(session: Session, event_id: int) -> bool:
+    scored_match = session.exec(
+        select(Match.id)
+        .where(
+            (Match.event_id == event_id)
+            & ((Match.score_team1 != None) | (Match.score_team2 != None))
+        )
+        .limit(1)
+    ).first()
+    return scored_match is not None
 
 
 def _format_record_text(wins: int, losses: int, ties: int = 0) -> str:
