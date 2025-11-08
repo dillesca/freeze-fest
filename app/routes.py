@@ -308,7 +308,16 @@ def _render(
 async def index(request: Request, session: Session = Depends(get_session)):
     status = request.query_params.get("rsvp")
     is_admin = _is_admin(request)
-    context = _home_context(session, rsvp_status=status, include_blocked=is_admin)
+    notice_key = request.query_params.get("notice")
+    notice_messages = {
+        "pending_message": "Thanks! An organizer will review your note and post it once it’s approved.",
+    }
+    context = _home_context(
+        session,
+        rsvp_status=status,
+        include_blocked=is_admin,
+        rsvp_notice=notice_messages.get(notice_key),
+    )
     return _render(request, "index.html", context)
 
 
@@ -666,11 +675,16 @@ async def submit_rsvp(
         error = "Please include at least one guest."
 
     if error:
-        context = _home_context(session, rsvp_error=error, include_blocked=_is_admin(request))
+        context = _home_context(
+            session,
+            rsvp_error=error,
+            include_blocked=_is_admin(request),
+            rsvp_notice=None,
+        )
         return _render(request, "index.html", context, status_code=400)
 
     cleaned_message = cleaned_message or None
-    flagged = needs_review(trimmed_name, cleaned_message or "")
+    flagged = bool(cleaned_message) or needs_review(trimmed_name, cleaned_message or "")
     status_value = MODERATION_BLOCKED if flagged else MODERATION_APPROVED
     rsvp = RSVP(
         name=trimmed_name,
@@ -687,8 +701,7 @@ async def submit_rsvp(
         f"Name: {trimmed_name}\nGuests: {guests}\nMessage: {cleaned_message or '-'}\nStatus: {status_value}",
     )
 
-    redirect_state = "pending" if flagged else "saved"
-    redirect_url = str(request.url_for("index")) + f"?rsvp={redirect_state}"
+    redirect_url = str(request.url_for("index")) + ("?rsvp=pending&notice=pending_message" if flagged else "?rsvp=saved")
     return RedirectResponse(redirect_url, status_code=303)
 
 
@@ -722,13 +735,19 @@ async def update_rsvp(
     trimmed_name = name.strip()
     cleaned_message = message.strip() if message else None
     if not trimmed_name:
-        context = _home_context(session, rsvp_error="Name is required.", include_blocked=_is_admin(request))
+        context = _home_context(
+            session,
+            rsvp_error="Name is required.",
+            include_blocked=_is_admin(request),
+            rsvp_notice=None,
+        )
         return _render(request, "index.html", context, status_code=400)
     if len(trimmed_name) > MAX_TEXT_LENGTH:
         context = _home_context(
             session,
             rsvp_error=f"Names must be {MAX_TEXT_LENGTH} characters or fewer.",
             include_blocked=_is_admin(request),
+            rsvp_notice=None,
         )
         return _render(request, "index.html", context, status_code=400)
     if cleaned_message and len(cleaned_message) > MAX_TEXT_LENGTH:
@@ -736,10 +755,16 @@ async def update_rsvp(
             session,
             rsvp_error=f"Messages must be {MAX_TEXT_LENGTH} characters or fewer.",
             include_blocked=_is_admin(request),
+            rsvp_notice=None,
         )
         return _render(request, "index.html", context, status_code=400)
     if guests < 1:
-        context = _home_context(session, rsvp_error="Please include at least one guest.", include_blocked=_is_admin(request))
+        context = _home_context(
+            session,
+            rsvp_error="Please include at least one guest.",
+            include_blocked=_is_admin(request),
+            rsvp_notice=None,
+        )
         return _render(request, "index.html", context, status_code=400)
 
     rsvp.name = trimmed_name
@@ -747,7 +772,7 @@ async def update_rsvp(
     updated_message = cleaned_message or None
     rsvp.message = updated_message
 
-    flagged_update = needs_review(trimmed_name, updated_message or "")
+    flagged_update = bool(updated_message) or needs_review(trimmed_name, updated_message or "")
     if flagged_update:
         upsert_pending_change(
             session,
@@ -800,7 +825,9 @@ async def update_rsvp(
             f"Name: {trimmed_name}\\nGuests: {guests}\\nMessage: {(updated_message or '-')}\\nStatus: {rsvp.status}",
         )
 
-    redirect_url = str(request.url_for("index")) + f"?rsvp={redirect_state}"
+    redirect_url = str(request.url_for("index")) + (
+        "?rsvp=pending&notice=pending_message" if flagged_update else "?rsvp=updated"
+    )
     return RedirectResponse(redirect_url, status_code=303)
 
 
@@ -1833,6 +1860,7 @@ def _home_context(
     rsvp_error: str | None = None,
     rsvp_status: str | None = None,
     include_blocked: bool = False,
+    rsvp_notice: str | None = None,
 ) -> dict[str, object]:
     event = get_active_event(session)
     rsvps = _fetch_rsvps(session, event.id, status=MODERATION_APPROVED)
@@ -1845,6 +1873,7 @@ def _home_context(
         "rsvp_status": rsvp_status,
         "blocked_rsvps": _fetch_rsvps(session, event.id, status=MODERATION_BLOCKED) if include_blocked else [],
         "pending_rsvp_updates": _pending_updates(session, "rsvp", RSVP) if include_blocked else [],
+        "rsvp_notice": rsvp_notice,
     }
 
 

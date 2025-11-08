@@ -64,6 +64,9 @@
     <main class="content">
       <section class="panel">
         <h2>RSVP</h2>
+        {% if rsvp_notice %}
+        <p class="flash flash--info">{{ rsvp_notice }}</p>
+        {% endif %}
         <p>Let us know you’re coming so we can prep heats, scorecards, and refreshments.</p>
         <form method="post" action="{{ request.url_for('submit_rsvp') }}" class="rsvp-form">
           <div class="hp-field" aria-hidden="true">
