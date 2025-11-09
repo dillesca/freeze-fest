@@ -18,7 +18,6 @@ from uuid import uuid4
 from urllib.parse import quote, urljoin
 
 from collections import defaultdict
-
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -470,7 +469,6 @@ async def start_playoffs(request: Request, session: Session = Depends(get_sessio
             for match in final_matches:
                 session.delete(match)
             session.commit()
-
         if len(leaderboard) < 3:
             redirect_url = str(request.url_for("bracket")) + "?playoff=semis-need-teams"
             return RedirectResponse(redirect_url, status_code=303)

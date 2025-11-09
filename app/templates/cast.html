@@ -170,8 +170,11 @@
         context.addCustomMessageListener(heartbeatNamespace, () => {
           // Heartbeat received; no action needed beyond keeping session active.
         });
-        context.setInactivityTimeout(3600);
-        context.start({ statusText: "Freeze Fest Live" });
+        const receiverOptions = new window.cast.framework.CastReceiverOptions();
+        receiverOptions.statusText = "Freeze Fest Live";
+        receiverOptions.maxInactivity = 3600;
+        receiverOptions.disableIdleTimeout = true;
+        context.start(receiverOptions);
       });
     </script>
   </body>
