@@ -1,6 +1,34 @@
 (function () {
   const PHOTO_INTERVAL_MS = 7000;
   const POLL_INTERVAL_MS = 15000;
+  const logReceiverError = (payload) => {
+    try {
+      fetch("/cast/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch (err) {
+      console.warn("Failed to report cast error", err);
+    }
+  };
+
+  window.onerror = function (message, source, lineno, colno, error) {
+    logReceiverError({
+      message,
+      source,
+      lineno,
+      colno,
+      stack: error && error.stack,
+    });
+  };
+
+  window.addEventListener("unhandledrejection", (event) => {
+    logReceiverError({
+      message: event.reason && event.reason.message,
+      stack: event.reason && event.reason.stack,
+    });
+  });
 
   const initialState = window.CAST_STATE || { event: {}, photos: [], games: [], generated_at: null };
 

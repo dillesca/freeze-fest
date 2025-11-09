@@ -641,6 +641,26 @@ async def rules_page(request: Request, session: Session = Depends(get_session)):
     return _render(request, "game_rules.html", context)
 
 
+@router.post("/cast/log", name="cast_log")
+async def cast_log(request: Request):
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    message = payload.get("message") or payload.get("error") or "Unknown cast log"
+    source = payload.get("source")
+    line = payload.get("lineno")
+    stack = payload.get("stack")
+    logger.warning(
+        "Cast receiver log: %s (source=%s line=%s stack=%s)",
+        message,
+        source,
+        line,
+        stack,
+    )
+    return {"status": "logged"}
+
+
 @router.post("/rsvp", response_class=HTMLResponse, name="submit_rsvp")
 async def submit_rsvp(
     request: Request,
