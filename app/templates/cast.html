@@ -170,6 +170,7 @@
         context.addCustomMessageListener(heartbeatNamespace, () => {
           // Heartbeat received; no action needed beyond keeping session active.
         });
+        context.setInactivityTimeout(0); // legacy safeguard
         const receiverOptions = new window.cast.framework.CastReceiverOptions();
         receiverOptions.statusText = "Freeze Fest Live";
         receiverOptions.maxInactivity = 3600;
