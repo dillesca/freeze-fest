@@ -28,7 +28,7 @@
         </section>
 
         {% if cast_state.semifinalists %}
-        <section class="cast-semis" aria-label="Leaderboard">
+        <section class="cast-semis" aria-label="Leaderboard" data-cast-leaderboard>
           <header class="cast-semis__header">
             <div>
               <h2>Leaderboard</h2>
@@ -38,7 +38,7 @@
             <p class="cast-semis__updated" data-last-updated>Updated {{ cast_state.generated_at }}</p>
             {% endif %}
           </header>
-          <div class="cast-semis__grid">
+          <div class="cast-semis__grid" data-cast-leaderboard-grid>
             {% set chunk_size = 4 %}
             {% set total = cast_state.semifinalists|length %}
             {% for start in range(0, total, chunk_size) %}
@@ -171,6 +171,19 @@
           </article>
           {% endfor %}
         {% else %}
+          {% if cast_state.final_match %}
+          <article class="cast-card" data-game-card>
+            <h2>Final Match</h2>
+            <p class="cast-card__value">
+              {{ cast_state.final_match.team1 }} vs {{ cast_state.final_match.team2 }}
+            </p>
+            {% if cast_state.final_match.score1 is not none and cast_state.final_match.score2 is not none %}
+            <p class="cast-card__value">Score: {{ cast_state.final_match.score1 }} - {{ cast_state.final_match.score2 }}</p>
+            {% else %}
+            <p class="cast-card__value">{{ cast_state.final_match.status|title }}</p>
+            {% endif %}
+          </article>
+          {% endif %}
           <article class="cast-card cast-card--empty" data-game-card>
             <h2>Matches</h2>
             <p class="cast-card__value">Match assignments will appear here as soon as the tournament begins.</p>

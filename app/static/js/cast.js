@@ -39,6 +39,8 @@
   const captionEl = document.querySelector("[data-photo-caption]");
   const gamesContainer = document.querySelector("[data-cast-games]");
   const updatedEl = document.querySelector("[data-last-updated]");
+  const leaderboardSection = document.querySelector("[data-cast-leaderboard]");
+  const leaderboardGrid = document.querySelector("[data-cast-leaderboard-grid]");
 
   let photos = Array.isArray(initialState.photos) ? initialState.photos.slice() : [];
   let photoIndex = 0;
@@ -268,6 +270,83 @@
     syncLayoutHeights();
   };
 
+  const renderLeaderboard = (teams, bucketMode) => {
+    if (!leaderboardGrid || !leaderboardSection) {
+      return;
+    }
+    if (!Array.isArray(teams) || !teams.length) {
+      leaderboardSection.classList.add("is-hidden");
+      leaderboardGrid.innerHTML = "";
+      return;
+    }
+    leaderboardSection.classList.remove("is-hidden");
+    leaderboardGrid.innerHTML = "";
+    const chunkSize = 4;
+    for (let start = 0; start < teams.length; start += chunkSize) {
+      const column = document.createElement("div");
+      column.className = "cast-semis__col";
+      for (let offset = 0; offset < chunkSize; offset += 1) {
+        const index = start + offset;
+        const team = teams[index];
+        if (!team) {
+          continue;
+        }
+        const item = document.createElement("div");
+        item.className = "cast-semis__item";
+        if (index < 4) {
+          item.classList.add("cast-semis__item--qualified");
+        }
+
+        const rank = document.createElement("span");
+        rank.className = "cast-semis__rank";
+        rank.textContent = `#${index + 1}`;
+        item.appendChild(rank);
+
+        const body = document.createElement("div");
+        body.className = "cast-semis__body";
+        const name = document.createElement("p");
+        name.className = "cast-semis__name-title";
+        name.textContent = team.name || "Team";
+        body.appendChild(name);
+
+        if (bucketMode) {
+          const bucket = document.createElement("p");
+          bucket.className = "cast-semis__meta cast-semis__golf";
+          bucket.textContent =
+            typeof team.bucket_score === "number" ? `Strokes: ${team.bucket_score}` : "Golf incomplete";
+          body.appendChild(bucket);
+        }
+
+        const record = document.createElement("div");
+        record.className = "cast-semis__record";
+        if (typeof team.wins === "number" && typeof team.losses === "number") {
+          const wl = document.createElement("p");
+          wl.className = "cast-semis__meta";
+          wl.textContent = `W: ${team.wins} / L: ${team.losses}`;
+          record.appendChild(wl);
+          if (team.ties) {
+            const ties = document.createElement("p");
+            ties.className = "cast-semis__meta";
+            ties.textContent = `T: ${team.ties}`;
+            record.appendChild(ties);
+          }
+        } else {
+          const placeholder = document.createElement("p");
+          placeholder.className = "cast-semis__meta";
+          placeholder.textContent = "W/L/T: --";
+          record.appendChild(placeholder);
+        }
+
+        body.appendChild(record);
+        item.appendChild(body);
+        column.appendChild(item);
+      }
+      if (column.children.length) {
+        leaderboardGrid.appendChild(column);
+      }
+    }
+  };
+
   const updateTimestamp = (isoString) => {
     if (!updatedEl) return;
     if (!isoString) {
@@ -290,6 +369,7 @@
     }
     syncPhotos(nextState.photos || []);
     renderGames(nextState.games || []);
+    renderLeaderboard(nextState.semifinalists || [], nextState.bucket_pool_mode);
     updateTimestamp(nextState.generated_at);
     syncLayoutHeights();
   };

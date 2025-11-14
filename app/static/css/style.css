@@ -428,14 +428,15 @@ body {
 
 .cast-semis__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.5rem;
 }
 
 .cast-semis__col {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.3rem;
+  min-width: 0;
 }
 
 .cast-semis__item {
@@ -464,6 +465,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.05rem;
+  min-width: 0;
 }
 
 .cast-semis__name-title {
@@ -2097,4 +2099,7 @@ body {
 
 .page-nav a:hover {
   background: rgba(255, 255, 255, 0.3);
+}
+.is-hidden {
+  display: none !important;
 }

@@ -2817,6 +2817,10 @@ def _cast_state(session: Session) -> dict[str, object]:
     )
     matches = session.exec(match_query).all()
     non_playoff_matches = [match for match in matches if not match.is_playoff]
+    final_match = next((match for match in matches if match.is_playoff and match.playoff_round == "final"), None)
+    final_payload = (
+        _cast_match_payload(final_match, team_lookup) if final_match else None
+    )
 
     match_payload = [
         {
@@ -2932,7 +2936,7 @@ def _cast_state(session: Session) -> dict[str, object]:
             }
 
     semifinalists: list[dict[str, object]] = []
-    for entry in leaderboard:
+    for entry in leaderboard[:16]:
         team_id = entry.get("id")
         if team_id is None:
             continue
@@ -2962,6 +2966,7 @@ def _cast_state(session: Session) -> dict[str, object]:
         "games": games_payload,
         "semifinalists": semifinalists,
         "bucket_pool_mode": bucket_pool_mode,
+        "final_match": final_payload,
     }
 
 
