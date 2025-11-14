@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ cast_state.event.name }} • Live Cast</title>
     <link rel="icon" type="image/png" href="{{ request.url_for('static', path='img/freezefest-transparent.png') }}">
-    <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
+    <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}?v={{ static_version }}">
   </head>
   <body class="cast-body">
     <main class="cast-layout">
@@ -183,7 +183,7 @@
       window.CAST_STATE = {{ cast_state | tojson }};
     </script>
     <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js" defer></script>
-    <script src="{{ request.url_for('static', path='js/cast.js') }}" defer></script>
+    <script src="{{ request.url_for('static', path='js/cast.js') }}?v={{ static_version }}" defer></script>
     <script>
       window.addEventListener("load", () => {
         const hasCastFramework = window.cast && window.cast.framework;

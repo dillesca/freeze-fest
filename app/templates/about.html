@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>About Freeze Fest</title>
     <link rel="icon" type="image/png" href="{{ request.url_for('static', path='img/freezefest-transparent.png') }}">
-    <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
+    <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}?v={{ static_version }}">
     {% if cast_sender_enabled %}
     {% include '_cast_sender_head.html' %}
     {% endif %}
