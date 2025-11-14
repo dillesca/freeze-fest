@@ -215,8 +215,10 @@
 
         const context = window.cast.framework.CastReceiverContext.getInstance();
         const heartbeatNamespace = "urn:x-cast:freeze.heartbeat";
-        context.addCustomMessageListener(heartbeatNamespace, () => {
-          // Heartbeat received; no action needed beyond keeping session active.
+        context.addCustomMessageListener(heartbeatNamespace, (event) => {
+          if (event && event.senderId) {
+            context.sendCustomMessage(heartbeatNamespace, event.senderId, { pong: Date.now() });
+          }
         });
         context.setInactivityTimeout(0); // legacy safeguard
         const receiverOptions = new window.cast.framework.CastReceiverOptions();
