@@ -2951,6 +2951,7 @@ def _cast_state(session: Session) -> dict[str, object]:
                 "losses": record.get("losses"),
                 "ties": record.get("ties"),
                 "bucket_score": entry.get("bucket_score"),
+                "bucket_result": entry.get("bucket_result"),
             }
         )
 
@@ -3117,6 +3118,8 @@ def _build_leaderboard(
             "games": 0,
             "points_scored": 0,
             "points_allowed": 0,
+            "bucket_result": None,
+            "bucket_loss_penalty": 0,
         }
 
     bucket_scores: dict[int, int | None] = {team_id: None for team_id in team_lookup}
@@ -3135,7 +3138,11 @@ def _build_leaderboard(
                 "games": 0,
                 "points_scored": 0,
                 "points_allowed": 0,
+                "bucket_result": None,
+                "bucket_loss_penalty": 0,
             }
+        if team1_id not in bucket_scores:
+            bucket_scores[team1_id] = None
         if team2_id not in stats:
             stats[team2_id] = {
                 "name": team_lookup.get(team2_id, "Team"),
@@ -3144,7 +3151,24 @@ def _build_leaderboard(
                 "games": 0,
                 "points_scored": 0,
                 "points_allowed": 0,
+                "bucket_result": None,
+                "bucket_loss_penalty": 0,
             }
+        if team2_id not in bucket_scores:
+            bucket_scores[team2_id] = None
+        if game == "Bucket Golf":
+            if score1 is not None:
+                current = bucket_scores.get(team1_id)
+                if current is None or score1 < current:
+                    bucket_scores[team1_id] = score1
+            if team2_id != team1_id and score2 is not None:
+                current_two = bucket_scores.get(team2_id)
+                if current_two is None or score2 < current_two:
+                    bucket_scores[team2_id] = score2
+            # Solo bucket runs skip head-to-head stats; wins are assigned after all scores are in.
+            if team1_id == team2_id:
+                continue
+
         if score1 is None or score2 is None:
             continue
         if team1_id == team2_id:
@@ -3152,18 +3176,6 @@ def _build_leaderboard(
         else:
             stats[team1_id]["games"] += 1
             stats[team2_id]["games"] += 1
-
-        if game == "Bucket Golf":
-            current = bucket_scores.get(team1_id)
-            if current is None or score1 < current:
-                bucket_scores[team1_id] = score1
-            if team2_id != team1_id:
-                current_two = bucket_scores.get(team2_id)
-                if current_two is None or score2 < current_two:
-                    bucket_scores[team2_id] = score2
-            # Solo bucket runs skip head-to-head stats; wins are assigned after all scores are in.
-            if team1_id == team2_id:
-                continue
 
         stats[team1_id]["points_scored"] += score1
         stats[team1_id]["points_allowed"] += score2
@@ -3175,9 +3187,35 @@ def _build_leaderboard(
         elif score2 > score1:
             stats[team2_id]["wins"] += 1
 
+    if bucket_pool_mode:
+        bucket_entries = sorted(
+            (score, team_id) for team_id, score in bucket_scores.items() if score is not None
+        )
+        if bucket_entries:
+            half = len(bucket_entries) // 2
+            winners = {team_id for _, team_id in bucket_entries[:half]}
+            tie_entry = bucket_entries[half] if len(bucket_entries) % 2 == 1 else None
+            tie_team_id = tie_entry[1] if tie_entry else None
+            for index, (_, team_id) in enumerate(bucket_entries):
+                if team_id in winners:
+                    stats[team_id]["wins"] += 1
+                    stats[team_id]["bucket_result"] = "win"
+                elif tie_team_id is not None and team_id == tie_team_id:
+                    stats[team_id]["ties"] += 1
+                    stats[team_id]["bucket_result"] = "tie"
+                else:
+                    stats[team_id]["bucket_result"] = "loss"
+                    stats[team_id]["bucket_loss_penalty"] = 1
+
+    all_teams_have_results = all(record["games"] > 0 for record in stats.values())
+
     leaderboard = []
     for team_id, record in stats.items():
+        bucket_loss_penalty = record.get("bucket_loss_penalty", 0) or 0
         losses = record["games"] - record["wins"] - record["ties"]
+        if losses < 0:
+            losses = 0
+        losses += bucket_loss_penalty
         entry = {
             "id": team_id,
             "name": record["name"],
@@ -3186,6 +3224,8 @@ def _build_leaderboard(
             "losses": losses,
             "games": record["games"],
             "bucket_score": bucket_scores.get(team_id),
+            "bucket_result": record.get("bucket_result"),
+            "bucket_loss_penalty": bucket_loss_penalty,
             "points_scored": record["points_scored"],
             "points_allowed": record["points_allowed"],
         }
@@ -3197,6 +3237,8 @@ def _build_leaderboard(
         games = item["games"]
         adjusted_wins = wins + 0.5 * ties
         win_pct = (adjusted_wins / games) if games else 0
+        if not all_teams_have_results:
+            return (-win_pct, item["name"])
         bucket_rank = item["bucket_score"] if item["bucket_score"] is not None else float("inf")
         point_diff = item["points_scored"] - item["points_allowed"]
         points_scored = item["points_scored"]

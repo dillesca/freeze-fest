@@ -50,12 +50,13 @@
                   <div class="cast-semis__item {% if index < 4 %}cast-semis__item--qualified{% endif %}">
                     <span class="cast-semis__rank">#{{ index + 1 }}</span>
                     <div class="cast-semis__body">
-                      <p class="cast-semis__name-title">{{ team.name }}</p>
+                      {% set display_name = team.name[:15] ~ ('...' if team.name|length > 15 else '') %}
+                      <p class="cast-semis__name-title">{{ display_name }}</p>
                       {% if cast_state.bucket_pool_mode %}
                         {% if team.bucket_score is not none %}
-                        <p class="cast-semis__meta cast-semis__golf">Strokes: {{ team.bucket_score }}</p>
+                        <p class="cast-semis__meta cast-semis__golf">Bucket score: {{ team.bucket_score }}</p>
                         {% else %}
-                        <p class="cast-semis__meta cast-semis__golf">Golf incomplete</p>
+                        <p class="cast-semis__meta cast-semis__golf">Bucket score: N/A</p>
                         {% endif %}
                       {% endif %}
                       <div class="cast-semis__record">
@@ -68,6 +69,23 @@
                         <p class="cast-semis__meta">W/L/T: --</p>
                         {% endif %}
                       </div>
+                      {% if cast_state.bucket_pool_mode %}
+                      <p class="cast-semis__meta cast-semis__bucket
+                        {% if team.bucket_result == 'win' %}cast-semis__bucket--win
+                        {% elif team.bucket_result == 'loss' %}cast-semis__bucket--loss
+                        {% elif team.bucket_result == 'tie' %}cast-semis__bucket--tie
+                        {% else %}cast-semis__bucket--pending{% endif %}">
+                        {% if team.bucket_result == 'win' %}
+                          +1 win via bucket score
+                        {% elif team.bucket_result == 'loss' %}
+                          +1 loss via bucket score
+                        {% elif team.bucket_result == 'tie' %}
+                          Bucket score counted as tie
+                        {% else %}
+                          Bucket score pending
+                        {% endif %}
+                      </p>
+                      {% endif %}
                     </div>
                   </div>
                 {% endif %}
@@ -80,15 +98,6 @@
       </div>
 
       <section class="cast-grid" data-cast-games>
-        <article class="cast-event-card">
-          <div class="cast-event-card__titles">
-            <h1>{{ cast_state.event.name }}</h1>
-          </div>
-          <div class="cast-event-card__logo">
-            <img src="{{ request.url_for('static', path='img/freezefest-transparent.png') }}" alt="Freeze Fest mascot" />
-          </div>
-        </article>
-
         {% if cast_state.games %}
           {% for item in cast_state.games %}
           <article class="cast-card" data-game-card>

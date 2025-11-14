@@ -306,14 +306,17 @@
         body.className = "cast-semis__body";
         const name = document.createElement("p");
         name.className = "cast-semis__name-title";
-        name.textContent = team.name || "Team";
+        const rawName = team.name || "Team";
+        name.textContent = rawName.length > 15 ? `${rawName.slice(0, 15)}...` : rawName;
         body.appendChild(name);
 
         if (bucketMode) {
           const bucket = document.createElement("p");
           bucket.className = "cast-semis__meta cast-semis__golf";
           bucket.textContent =
-            typeof team.bucket_score === "number" ? `Strokes: ${team.bucket_score}` : "Golf incomplete";
+            typeof team.bucket_score === "number"
+              ? `Bucket score: ${team.bucket_score}`
+              : "Bucket score: N/A";
           body.appendChild(bucket);
         }
 
@@ -338,6 +341,25 @@
         }
 
         body.appendChild(record);
+
+        if (bucketMode) {
+          const bucketFlag = document.createElement("p");
+          let modifier = "cast-semis__bucket--pending";
+          let text = "Bucket score pending";
+          if (team.bucket_result === "win") {
+            modifier = "cast-semis__bucket--win";
+            text = "+1 win via bucket score";
+          } else if (team.bucket_result === "loss") {
+            modifier = "cast-semis__bucket--loss";
+            text = "+1 loss via bucket score";
+          } else if (team.bucket_result === "tie") {
+            modifier = "cast-semis__bucket--tie";
+            text = "Bucket score counted as tie";
+          }
+          bucketFlag.className = `cast-semis__meta cast-semis__bucket ${modifier}`;
+          bucketFlag.textContent = text;
+          body.appendChild(bucketFlag);
+        }
         item.appendChild(body);
         column.appendChild(item);
       }
@@ -406,3 +428,4 @@
   window.addEventListener("resize", syncLayoutHeights);
   syncLayoutHeights();
 })();
+
