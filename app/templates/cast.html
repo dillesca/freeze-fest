@@ -9,83 +9,90 @@
   </head>
   <body class="cast-body">
     <main class="cast-layout">
-      <section class="cast-photo">
-        <div class="cast-photo__frame">
-          {% if cast_state.photos %}
-          <img
-            src="{{ cast_state.photos[0].image_url }}"
-            alt="Freeze Fest event highlight"
-            loading="lazy"
-            data-cast-photo
-          />
-          {% else %}
-          <div class="cast-photo__placeholder" data-cast-photo-placeholder>
-            <p>No photos yet. Upload highlights to start the slideshow.</p>
+      <div class="cast-top {% if not cast_state.semifinalists %}cast-top--solo{% endif %}">
+        <section class="cast-photo">
+          <div class="cast-photo__frame">
+            {% if cast_state.photos %}
+            <img
+              src="{{ cast_state.photos[0].image_url }}"
+              alt="Freeze Fest event highlight"
+              loading="lazy"
+              data-cast-photo
+            />
+            {% else %}
+            <div class="cast-photo__placeholder" data-cast-photo-placeholder>
+              <p>No photos yet. Upload highlights to start the slideshow.</p>
+            </div>
+            {% endif %}
           </div>
-          {% endif %}
-        </div>
-      </section>
+        </section>
 
-      <aside class="cast-info">
-        <div class="cast-info__summary">
-          <header class="cast-info__header cast-info__header--stacked">
-            <div class="cast-info__titles">
-              <h1>{{ cast_state.event.name }}</h1>
-            </div>
-            <div class="cast-info__logo">
-              <img src="{{ request.url_for('static', path='img/freezefest-transparent.png') }}" alt="Freeze Fest mascot" />
-            </div>
-          </header>
-
-          {% if cast_state.semifinalists %}
-          <section class="cast-semis" aria-label="Leaderboard">
-            <header class="cast-semis__header">
+        {% if cast_state.semifinalists %}
+        <section class="cast-semis" aria-label="Leaderboard">
+          <header class="cast-semis__header">
+            <div>
               <h2>Leaderboard</h2>
-              <span class="cast-semis__note">Top four in semifinals</span>
-            </header>
-            <ol class="cast-semis__list">
-              {% for team in cast_state.semifinalists %}
-              <li class="cast-semis__item {% if loop.index <= 4 %}cast-semis__item--qualified{% endif %}">
-                <span class="cast-semis__rank">#{{ loop.index }}</span>
-                <div class="cast-semis__body">
-                  <div class="cast-semis__headline">
-                    <div class="cast-semis__name">
+              <p class="cast-semis__note">Top four advance to semifinals</p>
+            </div>
+            {% if cast_state.generated_at %}
+            <p class="cast-semis__updated" data-last-updated>Updated {{ cast_state.generated_at }}</p>
+            {% endif %}
+          </header>
+          <div class="cast-semis__grid">
+            {% set chunk_size = 4 %}
+            {% set total = cast_state.semifinalists|length %}
+            {% for start in range(0, total, chunk_size) %}
+            <div class="cast-semis__col">
+              {% for offset in range(chunk_size) %}
+                {% set index = start + offset %}
+                {% if index < total %}
+                  {% set team = cast_state.semifinalists[index] %}
+                  <div class="cast-semis__item {% if index < 4 %}cast-semis__item--qualified{% endif %}">
+                    <span class="cast-semis__rank">#{{ index + 1 }}</span>
+                    <div class="cast-semis__body">
                       <p class="cast-semis__name-title">{{ team.name }}</p>
                       {% if cast_state.bucket_pool_mode %}
                         {% if team.bucket_score is not none %}
-                        <p class="cast-semis__meta cast-semis__golf">Golf Strokes: {{ team.bucket_score }}</p>
+                        <p class="cast-semis__meta cast-semis__golf">Strokes: {{ team.bucket_score }}</p>
                         {% else %}
                         <p class="cast-semis__meta cast-semis__golf">Golf incomplete</p>
                         {% endif %}
                       {% endif %}
-                    </div>
-                    <div class="cast-semis__record">
-                      {% if team.wins is not none %}
-                      <p class="cast-semis__meta">Win: {{ team.wins }}</p>
-                      <p class="cast-semis__meta">Loss: {{ team.losses }}</p>
-                      {% if team.ties %}
-                      <p class="cast-semis__meta">Ties: {{ team.ties }}</p>
-                      {% endif %}
-                      {% else %}
-                      <p class="cast-semis__meta">Win: --</p>
-                      <p class="cast-semis__meta">Loss: --</p>
-                      <p class="cast-semis__meta">Ties: --</p>
-                      {% endif %}
+                      <div class="cast-semis__record">
+                        {% if team.wins is not none %}
+                        <p class="cast-semis__meta">W: {{ team.wins }} / L: {{ team.losses }}</p>
+                        {% if team.ties %}
+                        <p class="cast-semis__meta">T: {{ team.ties }}</p>
+                        {% endif %}
+                        {% else %}
+                        <p class="cast-semis__meta">W/L/T: --</p>
+                        {% endif %}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </li>
+                {% endif %}
               {% endfor %}
-            </ol>
-          </section>
-          {% endif %}
-        </div>
+            </div>
+            {% endfor %}
+          </div>
+        </section>
+        {% endif %}
+      </div>
 
-        <section class="cast-games" data-cast-games>
-          {% if cast_state.games %}
-            {% for item in cast_state.games %}
-            <article class="cast-card">
-              <h2>{{ item.game }}</h2>
+      <section class="cast-grid" data-cast-games>
+        <article class="cast-event-card">
+          <div class="cast-event-card__titles">
+            <h1>{{ cast_state.event.name }}</h1>
+          </div>
+          <div class="cast-event-card__logo">
+            <img src="{{ request.url_for('static', path='img/freezefest-transparent.png') }}" alt="Freeze Fest mascot" />
+          </div>
+        </article>
+
+        {% if cast_state.games %}
+          {% for item in cast_state.games %}
+          <article class="cast-card" data-game-card>
+            <h2>{{ item.game }}</h2>
               <div class="cast-card__section">
                 <h3>Playing Now</h3>
                 {% if item.current %}
@@ -161,16 +168,15 @@
                 </p>
                 {% endif %}
               </div>
-            </article>
-            {% endfor %}
-          {% else %}
-            <article class="cast-card cast-card--empty">
-              <h2>Matches</h2>
-              <p class="cast-card__value">Match assignments will appear here as soon as the tournament begins.</p>
-            </article>
-          {% endif %}
-        </section>
-      </aside>
+          </article>
+          {% endfor %}
+        {% else %}
+          <article class="cast-card cast-card--empty" data-game-card>
+            <h2>Matches</h2>
+            <p class="cast-card__value">Match assignments will appear here as soon as the tournament begins.</p>
+          </article>
+        {% endif %}
+      </section>
     </main>
 
     <script>

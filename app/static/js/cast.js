@@ -38,7 +38,6 @@
   let placeholderEl = document.querySelector("[data-cast-photo-placeholder]");
   const captionEl = document.querySelector("[data-photo-caption]");
   const gamesContainer = document.querySelector("[data-cast-games]");
-  const headerEl = document.querySelector(".cast-info__header");
   const updatedEl = document.querySelector("[data-last-updated]");
 
   let photos = Array.isArray(initialState.photos) ? initialState.photos.slice() : [];
@@ -165,19 +164,10 @@
     const paddingBottom = parseFloat(layoutStyles.paddingBottom) || 0;
     const availableHeight = Math.max(360, window.innerHeight - paddingTop - paddingBottom);
 
-    const headerHeight = headerEl?.offsetHeight || 0;
-    const gamesHeight = gamesContainer?.scrollHeight || 0;
-    const cardsHeight = Math.max(0, headerHeight + gamesHeight);
-
-    const photoMaxHeight = cardsHeight ? Math.min(cardsHeight, availableHeight) : availableHeight;
+    const gridHeight = gamesContainer?.scrollHeight || 0;
+    const photoMaxHeight = gridHeight ? Math.min(gridHeight, availableHeight) : availableHeight;
     frameEl.style.maxHeight = `${photoMaxHeight}px`;
     frameEl.style.height = `${photoMaxHeight}px`;
-
-    if (gamesContainer) {
-      const gamesAvailable = Math.max(200, availableHeight - headerHeight);
-      gamesContainer.style.maxHeight = `${gamesAvailable}px`;
-      gamesContainer.style.height = `${Math.min(gamesHeight || gamesAvailable, gamesAvailable)}px`;
-    }
   };
 
   const renderGames = (games) => {
@@ -185,11 +175,17 @@
       return;
     }
 
-    gamesContainer.innerHTML = "";
+    const clearGameCards = () => {
+      const existing = gamesContainer.querySelectorAll("[data-game-card]");
+      existing.forEach((node) => node.remove());
+    };
+
+    clearGameCards();
 
     if (!Array.isArray(games) || games.length === 0) {
       const card = document.createElement("article");
       card.className = "cast-card cast-card--empty";
+      card.dataset.gameCard = "true";
       const title = document.createElement("h2");
       title.textContent = "Matches";
       const message = document.createElement("p");
@@ -203,6 +199,7 @@
     games.forEach((game) => {
       const card = document.createElement("article");
       card.className = "cast-card";
+      card.dataset.gameCard = "true";
 
       const heading = document.createElement("h2");
       heading.textContent = game.game;
@@ -274,16 +271,16 @@
   const updateTimestamp = (isoString) => {
     if (!updatedEl) return;
     if (!isoString) {
-      updatedEl.textContent = "—";
+      updatedEl.textContent = "Updated —";
       return;
     }
     const parsed = new Date(isoString);
     if (Number.isNaN(parsed.getTime())) {
-      updatedEl.textContent = isoString;
+      updatedEl.textContent = `Updated ${isoString}`;
       return;
     }
     const formatted = parsed.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    updatedEl.textContent = formatted;
+    updatedEl.textContent = `Updated ${formatted}`;
     updatedEl.dataset.raw = isoString;
   };
 
