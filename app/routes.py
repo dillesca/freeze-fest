@@ -3208,6 +3208,7 @@ def _build_leaderboard(
                     stats[team_id]["bucket_loss_penalty"] = 1
 
     all_teams_have_results = all(record["games"] > 0 for record in stats.values())
+    any_games_played = any(record["games"] > 0 for record in stats.values())
 
     leaderboard = []
     for team_id, record in stats.items():
@@ -3237,7 +3238,7 @@ def _build_leaderboard(
         games = item["games"]
         adjusted_wins = wins + 0.5 * ties
         win_pct = (adjusted_wins / games) if games else 0
-        if not all_teams_have_results:
+        if not any_games_played:
             return (-win_pct, item["name"])
         bucket_rank = item["bucket_score"] if item["bucket_score"] is not None else float("inf")
         point_diff = item["points_scored"] - item["points_allowed"]
