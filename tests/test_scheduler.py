@@ -14,6 +14,8 @@ from app.routes import (
     _build_leaderboard,
     _ensure_matches,
     _needs_bucket_pool,
+    _group_bucket_pool_matches,
+    _bucket_cast_sections,
 )
 
 
@@ -261,3 +263,110 @@ def test_bucket_pool_assigns_wins_losses_and_ties():
     assert records[3]["wins"] == 1
     assert records[4]["losses"] == 2
     assert records[5]["losses"] == 1
+
+
+def test_group_bucket_pool_matches_merges_runs():
+    payloads = [
+        {
+            "id": 101,
+            "team1": "Aurora",
+            "team2": None,
+            "is_bye": True,
+            "status": "pending",
+            "score1": None,
+            "score2": None,
+            "order": 1,
+        },
+        None,
+        {
+            "id": 102,
+            "team1": "Borealis",
+            "team2": None,
+            "is_bye": True,
+            "status": "pending",
+            "score1": None,
+            "score2": None,
+            "order": 2,
+        },
+        {
+            "id": 103,
+            "team1": "Comet",
+            "team2": None,
+            "is_bye": True,
+            "status": "pending",
+            "score1": None,
+            "score2": None,
+            "order": 3,
+        },
+    ]
+
+    grouped = _group_bucket_pool_matches(payloads)
+
+    assert len(grouped) == 2
+    assert grouped[0]["pool_group"] == ["Aurora", "Borealis"]
+    assert grouped[0]["pool_pair"] is True
+    assert grouped[0]["is_bye"] is False
+    assert grouped[1]["pool_group"] == ["Comet"]
+    assert grouped[1].get("pool_pair") is False
+
+
+def test_group_bucket_pool_matches_creates_trio():
+    payloads = [
+        {"id": 201, "team1": "Aurora", "team2": None, "is_bye": True, "status": "pending", "score1": None, "score2": None, "order": 1},
+        {"id": 202, "team1": "Borealis", "team2": None, "is_bye": True, "status": "pending", "score1": None, "score2": None, "order": 2},
+        {"id": 203, "team1": "Comet", "team2": None, "is_bye": True, "status": "pending", "score1": None, "score2": None, "order": 3},
+        {"id": 204, "team1": "Draco", "team2": None, "is_bye": True, "status": "pending", "score1": None, "score2": None, "order": 4},
+        {"id": 205, "team1": "Equinox", "team2": None, "is_bye": True, "status": "pending", "score1": None, "score2": None, "order": 5},
+    ]
+
+    grouped = _group_bucket_pool_matches(payloads)
+
+    assert len(grouped) == 2
+    assert grouped[0]["pool_group"] == ["Aurora", "Borealis"]
+    assert grouped[1]["pool_group"] == ["Comet", "Draco", "Equinox"]
+
+    grouped_trio = _group_bucket_pool_matches(payloads[2:])
+    assert len(grouped_trio) == 1
+    assert grouped_trio[0]["pool_group"] == ["Comet", "Draco", "Equinox"]
+
+
+def test_bucket_cast_sections_respects_wave_partners():
+    team_lookup = {
+        1: "Team1",
+        2: "Team2",
+        3: "Team3",
+        4: "Team4",
+        5: "Team5",
+        6: "Team6",
+        7: "Team7",
+    }
+    matches = [
+        Match(id=1, event_id=1, game="Bucket Golf", order_index=1, team1_id=6, team2_id=6, status="in_progress"),
+        Match(id=2, event_id=1, game="Bucket Golf", order_index=2, team1_id=2, team2_id=2, status="pending"),
+        Match(id=3, event_id=1, game="Bucket Golf", order_index=3, team1_id=4, team2_id=4, status="pending"),
+        Match(id=4, event_id=1, game="Bucket Golf", order_index=4, team1_id=1, team2_id=1, status="pending"),
+        Match(id=5, event_id=1, game="Bucket Golf", order_index=5, team1_id=5, team2_id=5, status="pending"),
+        Match(id=6, event_id=1, game="Bucket Golf", order_index=6, team1_id=7, team2_id=7, status="pending"),
+        Match(id=7, event_id=1, game="Bucket Golf", order_index=7, team1_id=3, team2_id=3, status="pending"),
+    ]
+
+    current, next_payload, upcoming = _bucket_cast_sections(matches, team_lookup, True)
+
+    assert current and current[0]["pool_group"] == ["Team6", "Team2"]
+    assert next_payload and next_payload["pool_group"] == ["Team4", "Team1"]
+    assert upcoming and upcoming[0]["pool_group"] == ["Team5", "Team7", "Team3"]
+
+
+def test_bucket_cast_sections_handles_idle_state():
+    team_lookup = {1: "Team1", 2: "Team2", 3: "Team3"}
+    matches = [
+        Match(id=1, event_id=1, game="Bucket Golf", order_index=1, team1_id=1, team2_id=1, status="pending"),
+        Match(id=2, event_id=1, game="Bucket Golf", order_index=2, team1_id=2, team2_id=2, status="pending"),
+        Match(id=3, event_id=1, game="Bucket Golf", order_index=3, team1_id=3, team2_id=3, status="pending"),
+    ]
+
+    current, next_payload, upcoming = _bucket_cast_sections(matches, team_lookup, True)
+
+    assert current == []
+    assert next_payload and next_payload["pool_group"] == ["Team1", "Team2"]
+    assert upcoming and upcoming[0]["pool_group"] == ["Team3"]

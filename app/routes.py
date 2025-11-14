@@ -2704,6 +2704,98 @@ def _cast_match_payload(match: Match | None, team_lookup: dict[int, str]) -> dic
     }
 
 
+def _group_bucket_pool_matches(match_payloads: list[dict[str, object] | None]) -> list[dict[str, object]]:
+    """Combine solo bucket golf runs into display waves (pairs plus an optional trio)."""
+    sanitized = [copy.deepcopy(entry) for entry in match_payloads if entry]
+    if not sanitized:
+        return []
+
+    grouped: list[dict[str, object]] = []
+    idx = 0
+    total = len(sanitized)
+    while idx < total:
+        remaining = total - idx
+        if remaining == 1:
+            group_size = 1
+        elif remaining == 3:
+            group_size = 3
+        else:
+            group_size = 2
+
+        wave = sanitized[idx : idx + group_size]
+        idx += group_size
+
+        names = [entry.get("team1", "TBD") for entry in wave if entry]
+        combined_ids = [entry.get("id") for entry in wave if entry and entry.get("id") is not None]
+        primary = wave[0]
+        if not primary:
+            continue
+
+        primary["pool_group"] = names
+        primary["pool_pair"] = len(names) >= 2
+        primary["pool_match_ids"] = combined_ids
+        primary["is_bye"] = False
+        primary["team2"] = None
+        if len(combined_ids) >= 2:
+            primary["id"] = "-".join(str(value) for value in combined_ids)
+
+        grouped.append(primary)
+
+    return grouped
+
+
+def _bucket_wave_groups(matches: list[Match], bucket_pool_mode: bool) -> list[list[Match]]:
+    """Group bucket golf solo runs into waves that mirror the scheduling logic."""
+    groups: list[list[Match]] = []
+    idx = 0
+    total = len(matches)
+    while idx < total:
+        remaining = total - idx
+        if bucket_pool_mode:
+            group_size = 3 if remaining == 3 else min(2, remaining)
+        else:
+            group_size = 1
+        groups.append(matches[idx : idx + group_size])
+        idx += group_size
+    return groups
+
+
+def _bucket_cast_sections(matches: list[Match], team_lookup: dict[int, str], bucket_pool_mode: bool) -> tuple[list[dict[str, object]], dict[str, object] | None, list[dict[str, object]]]:
+    """Return current/next/upcoming payloads for bucket golf waves."""
+    if not matches:
+        return [], None, []
+
+    waves = _bucket_wave_groups(matches, bucket_pool_mode)
+
+    active_index = next(
+        (index for index, wave in enumerate(waves) if any(match.status == "in_progress" for match in wave)),
+        None,
+    )
+    if active_index is None:
+        active_index = next(
+            (index for index, wave in enumerate(waves) if any(match.status != "completed" for match in wave)),
+            None,
+        )
+
+    def wave_payload(wave: list[Match]) -> list[dict[str, object]]:
+        payloads = [_cast_match_payload(match, team_lookup) for match in wave]
+        payloads = [payload for payload in payloads if payload]
+        return _group_bucket_pool_matches(payloads)
+
+    current_payloads: list[dict[str, object]] = []
+    if active_index is not None:
+        current_payloads = wave_payload(waves[active_index])
+
+    future_entries: list[dict[str, object]] = []
+    start_index = 0 if active_index is None else active_index + 1
+    for wave in waves[start_index:]:
+        future_entries.extend(wave_payload(wave))
+
+    next_payload = future_entries[0] if future_entries else None
+    upcoming_queue = future_entries[1:3]
+    return current_payloads, next_payload, upcoming_queue
+
+
 def _cast_state(session: Session) -> dict[str, object]:
     event = get_active_event(session)
     _refresh_match_statuses(session, event.id)
@@ -2751,30 +2843,36 @@ def _cast_state(session: Session) -> dict[str, object]:
     ):
         items.sort(key=lambda match: match.order_index)
         max_open = MAX_OPEN_MATCHES_PER_GAME.get(game_name, 1)
-        current_matches = [
-            match for match in items if match.status == "in_progress"
-        ][:max_open]
-        pending_matches = [
-            match
-            for match in items
-            if match.status == "pending" and match.id not in {m.id for m in current_matches}
-        ]
-        next_match = pending_matches[0] if pending_matches else None
-        remaining_count = sum(1 for match in items if match.status in {"pending", "in_progress"})
+        if bucket_pool_mode and game_name == "Bucket Golf":
+            max_open = max(max_open, 3)
+        if bucket_pool_mode and game_name == "Bucket Golf":
+            current_payloads, next_payload, upcoming_queue_payload = _bucket_cast_sections(items, team_lookup, bucket_pool_mode)
+            remaining_count = sum(1 for match in items if match.status in {"pending", "in_progress"})
+        else:
+            current_matches = [
+                match for match in items if match.status == "in_progress"
+            ][:max_open]
+            pending_matches = [
+                match
+                for match in items
+                if match.status == "pending" and match.id not in {m.id for m in current_matches}
+            ]
+            remaining_count = sum(1 for match in items if match.status in {"pending", "in_progress"})
 
-        upcoming_matches = []
-        for match in pending_matches:
-            upcoming_matches.append(_cast_match_payload(match, team_lookup))
-            if len(upcoming_matches) == 3:
-                break
+            current_payloads = [_cast_match_payload(match, team_lookup) for match in current_matches]
+            current_payloads = [payload for payload in current_payloads if payload]
+            pending_payloads = [_cast_match_payload(match, team_lookup) for match in pending_matches]
+            pending_payloads = [payload for payload in pending_payloads if payload]
+            next_payload = pending_payloads[0] if pending_payloads else None
+            upcoming_queue_payload = pending_payloads[1:3]
 
         games_payload.append(
             {
                 "game": game_name,
-                "current": [_cast_match_payload(match, team_lookup) for match in current_matches],
-                "next": _cast_match_payload(next_match, team_lookup),
+                "current": current_payloads,
+                "next": next_payload,
                 "remaining": remaining_count,
-                "upcoming_queue": upcoming_matches[1:],
+                "upcoming_queue": upcoming_queue_payload,
             }
         )
 

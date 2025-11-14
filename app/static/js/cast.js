@@ -48,6 +48,10 @@
 
   const formatMatch = (match) => {
     if (!match) return "Waiting for teams";
+    if (Array.isArray(match.pool_group) && match.pool_group.length) {
+      return match.pool_group.join(" + ");
+    }
+    if (match.pool_pair && match.team2) return `${match.team1} + ${match.team2}`;
     if (match.is_bye) return `${match.team1} (solo run)`;
     if (match.team2) {
       return `${match.team1} vs ${match.team2}`;

@@ -88,27 +88,43 @@
               <h2>{{ item.game }}</h2>
               <div class="cast-card__section">
                 <h3>Playing Now</h3>
-                <p class="cast-card__value" data-role="current">
-                  {% if item.current %}
-                    {% if item.current.is_bye %}
-                      {{ item.current.team1 }} (solo run)
-                    {% elif item.current.team2 %}
-                      {{ item.current.team1 }} vs {{ item.current.team2 }}
+                {% if item.current %}
+                <ul class="cast-card__matches" data-role="current">
+                  {% for current in item.current %}
+                  <li>
+                    {% if current.pool_group %}
+                      {{ current.pool_group|join(' + ') }}
+                    {% elif current.pool_pair and current.team2 %}
+                      {{ current.team1 }} + {{ current.team2 }}
+                    {% elif current.is_bye %}
+                      {{ current.team1 }} (solo run)
+                    {% elif current.team2 %}
+                      {{ current.team1 }} vs {{ current.team2 }}
                     {% else %}
-                      {{ item.current.team1 }}
+                      {{ current.team1 }}
                     {% endif %}
-                  {% elif item.remaining == 0 %}
+                  </li>
+                  {% endfor %}
+                </ul>
+                {% else %}
+                <p class="cast-card__value">
+                  {% if item.remaining == 0 %}
                     All matches complete
                   {% else %}
                     Waiting for the next teams
                   {% endif %}
                 </p>
+                {% endif %}
               </div>
               <div class="cast-card__section">
                 <h3>Upcoming Games</h3>
                 {% if item.next %}
                 <p class="cast-card__value" data-role="next">
-                  {% if item.next.is_bye %}
+                  {% if item.next.pool_group %}
+                    {{ item.next.pool_group|join(' + ') }}
+                  {% elif item.next.pool_pair and item.next.team2 %}
+                    {{ item.next.team1 }} + {{ item.next.team2 }}
+                  {% elif item.next.is_bye %}
                     {{ item.next.team1 }} (solo run)
                   {% elif item.next.team2 %}
                     {{ item.next.team1 }} vs {{ item.next.team2 }}
@@ -121,7 +137,11 @@
                 <ul class="cast-card__queue">
                   {% for upcoming in item.upcoming_queue %}
                   <li>
-                    {% if upcoming.is_bye %}
+                    {% if upcoming.pool_group %}
+                      {{ upcoming.pool_group|join(' + ') }}
+                    {% elif upcoming.pool_pair and upcoming.team2 %}
+                      {{ upcoming.team1 }} + {{ upcoming.team2 }}
+                    {% elif upcoming.is_bye %}
                       {{ upcoming.team1 }} (solo run)
                     {% elif upcoming.team2 %}
                       {{ upcoming.team1 }} vs {{ upcoming.team2 }}
