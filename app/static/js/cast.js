@@ -166,8 +166,8 @@
     const paddingBottom = parseFloat(layoutStyles.paddingBottom) || 0;
     const availableHeight = Math.max(360, window.innerHeight - paddingTop - paddingBottom);
 
-    const gridHeight = gamesContainer?.scrollHeight || 0;
-    const photoMaxHeight = gridHeight ? Math.min(gridHeight, availableHeight) : availableHeight;
+    const leaderboardHeight = leaderboardSection?.offsetHeight || availableHeight * 0.4;
+    const photoMaxHeight = Math.max(180, Math.min(leaderboardHeight, availableHeight * 0.5));
     frameEl.style.maxHeight = `${photoMaxHeight}px`;
     frameEl.style.height = `${photoMaxHeight}px`;
   };

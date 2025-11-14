@@ -30,9 +30,9 @@
         {% if cast_state.semifinalists %}
         <section class="cast-semis" aria-label="Leaderboard" data-cast-leaderboard>
           <header class="cast-semis__header">
-            <div>
+            <div class="cast-semis__header-main">
               <h2>Leaderboard</h2>
-              <p class="cast-semis__note">Top four advance to semifinals</p>
+              <p class="cast-semis__note">Top four advance</p>
             </div>
             {% if cast_state.generated_at %}
             <p class="cast-semis__updated" data-last-updated>Updated {{ cast_state.generated_at }}</p>
