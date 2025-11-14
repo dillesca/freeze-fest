@@ -608,7 +608,7 @@ body {
   }
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 900px) {
   .cast-top {
     grid-template-columns: 1fr;
   }
