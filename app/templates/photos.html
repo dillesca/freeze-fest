@@ -49,6 +49,35 @@
 
     <main class="content">
       <section class="panel">
+        <h2>Upload a Photo</h2>
+        <form method="post" action="{{ request.url_for('upload_photo') }}" enctype="multipart/form-data" class="upload-form">
+          <label for="photo-upload" class="upload-label">Add new photos</label>
+          <div class="upload-field">
+            <input id="photo-upload" name="images" type="file" accept="image/*" multiple required />
+            <span class="file-name" data-file-name>No files chosen</span>
+            <button type="submit">Upload</button>
+          </div>
+          <p class="helper-text">Select one or more images (PNG, JPG, GIF, WebP). Max ~10MB per file recommended.</p>
+        </form>
+
+        {% if photo_error %}
+        <p class="form-error">{{ photo_error }}</p>
+        {% endif %}
+        {% if photo_success %}
+        <p class="form-success">
+          {% if photo_success_count and photo_success_count > 1 %}
+          Uploaded {{ photo_success_count }} photos!
+          {% else %}
+          Photo uploaded!
+          {% endif %}
+        </p>
+        {% endif %}
+        {% if photo_deleted %}
+        <p class="form-success">Photo removed.</p>
+        {% endif %}
+      </section>
+
+      <section class="panel">
         <h2>Photos</h2>
         {% if photos %}
         <div class="photo-gallery">
@@ -76,35 +105,6 @@
         </div>
         {% else %}
         <p class="empty-state">No photos yet. Be the first to upload!</p>
-        {% endif %}
-      </section>
-
-      <section class="panel">
-        <h2>Upload a Photo</h2>
-        <form method="post" action="{{ request.url_for('upload_photo') }}" enctype="multipart/form-data" class="upload-form">
-          <label for="photo-upload" class="upload-label">Add new photos</label>
-          <div class="upload-field">
-            <input id="photo-upload" name="images" type="file" accept="image/*" multiple required />
-            <span class="file-name" data-file-name>No files chosen</span>
-            <button type="submit">Upload</button>
-          </div>
-          <p class="helper-text">Select one or more images (PNG, JPG, GIF, WebP). Max ~10MB per file recommended.</p>
-        </form>
-
-        {% if photo_error %}
-        <p class="form-error">{{ photo_error }}</p>
-        {% endif %}
-        {% if photo_success %}
-        <p class="form-success">
-          {% if photo_success_count and photo_success_count > 1 %}
-          Uploaded {{ photo_success_count }} photos!
-          {% else %}
-          Photo uploaded!
-          {% endif %}
-        </p>
-        {% endif %}
-        {% if photo_deleted %}
-        <p class="form-success">Photo removed.</p>
         {% endif %}
       </section>
     </main>
