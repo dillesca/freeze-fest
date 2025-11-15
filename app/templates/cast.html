@@ -215,7 +215,74 @@
 
         const context = window.cast.framework.CastReceiverContext.getInstance();
         const KEEPALIVE_AUDIO_BASE64 = "UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
-        const createKeepAliveUrl = () => {
+
+        const createKeepAliveVideoUrl = () => {
+          return new Promise((resolve, reject) => {
+            try {
+              const canvas = document.createElement("canvas");
+              canvas.width = 2;
+              canvas.height = 2;
+              const ctx = canvas.getContext("2d");
+              if (!ctx || typeof canvas.captureStream !== "function" || !window.MediaRecorder) {
+                reject(new Error("Canvas streaming or MediaRecorder unavailable"));
+                return;
+              }
+              let hue = 0;
+              let animationFrameId = null;
+              const draw = () => {
+                ctx.fillStyle = `hsl(${hue}, 70%, 55%)`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                hue = (hue + 31) % 360;
+                animationFrameId = requestAnimationFrame(draw);
+              };
+              draw();
+              const stream = canvas.captureStream(20);
+              const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp8")
+                ? "video/webm;codecs=vp8"
+                : "video/webm";
+              const recorder = new MediaRecorder(stream, { mimeType });
+              const chunks = [];
+              recorder.ondataavailable = (event) => {
+                if (event.data && event.data.size) {
+                  chunks.push(event.data);
+                }
+              };
+              recorder.onerror = (event) => {
+                cancelAnimationFrame(animationFrameId);
+                reject(event.error || new Error("MediaRecorder error"));
+              };
+              recorder.onstop = () => {
+                cancelAnimationFrame(animationFrameId);
+                try {
+                  const blob = new Blob(chunks, { type: recorder.mimeType || "video/webm" });
+                  const url = URL.createObjectURL(blob);
+                  window.addEventListener(
+                    "unload",
+                    () => {
+                      URL.revokeObjectURL(url);
+                    },
+                    { once: true }
+                  );
+                  resolve(url);
+                } catch (err) {
+                  reject(err);
+                }
+              };
+              recorder.start();
+              window.setTimeout(() => {
+                try {
+                  recorder.stop();
+                } catch (err) {
+                  reject(err);
+                }
+              }, 1500);
+            } catch (error) {
+              reject(error);
+            }
+          });
+        };
+
+        const createKeepAliveAudioUrl = () => {
           try {
             const binary = atob(KEEPALIVE_AUDIO_BASE64);
             const bytes = new Uint8Array(binary.length);
@@ -233,40 +300,85 @@
             );
             return url;
           } catch (error) {
-            console.warn("Failed to build keep-alive audio", error);
+            console.warn("Failed to build fallback keep-alive audio", error);
             return null;
           }
         };
 
-        const startKeepAlivePlayback = () => {
+        const startKeepAlivePlayback = async () => {
           const playerManager = context.getPlayerManager();
-          const keepAliveUrl = createKeepAliveUrl();
-          if (!playerManager || !keepAliveUrl) {
+          if (!playerManager) {
             return;
           }
 
-          const loadKeepAlive = () => {
-            const mediaInfo = new cast.framework.messages.MediaInformation();
-            mediaInfo.contentId = keepAliveUrl;
-            mediaInfo.contentType = "audio/wav";
-            mediaInfo.streamType = cast.framework.messages.StreamType.BUFFERED;
-            const loadRequest = new cast.framework.messages.LoadRequestData();
-            loadRequest.media = mediaInfo;
-            loadRequest.autoplay = true;
-            playerManager.load(loadRequest).catch((error) => {
-              console.warn("Keep-alive load failed", error);
-            });
+          const logPlayerEvent = (label, payload) => {
+            try {
+              console.log(`[Cast Player] ${label}`, payload);
+            } catch (_) {
+              // console might be disabled
+            }
           };
 
           playerManager.addEventListener(
-            cast.framework.events.EventType.MEDIA_FINISHED,
-            () => loadKeepAlive()
+            cast.framework.events.EventType.PLAYER_STATE_CHANGED,
+            (event) => logPlayerEvent("STATE", event)
           );
-          playerManager.addEventListener(cast.framework.events.EventType.ERROR, () => {
-            window.setTimeout(loadKeepAlive, 2000);
+          playerManager.addEventListener(cast.framework.events.EventType.ERROR, (event) => {
+            logPlayerEvent("ERROR", event);
+            if (keepAliveUrl) {
+              window.setTimeout(
+                () => loadMedia(keepAliveUrl, keepAliveContentType || "audio/wav"),
+                1000
+              );
+            }
           });
 
-          loadKeepAlive();
+          const loadMedia = (mediaUrl, contentType) => {
+            const mediaInfo = new cast.framework.messages.MediaInformation();
+            mediaInfo.contentId = mediaUrl;
+            mediaInfo.contentType = contentType;
+            mediaInfo.streamType = cast.framework.messages.StreamType.BUFFERED;
+            mediaInfo.duration = 2;
+            const loadRequest = new cast.framework.messages.LoadRequestData();
+            loadRequest.media = mediaInfo;
+            loadRequest.autoplay = true;
+            loadRequest.customData = { keepalive: true };
+            playerManager
+              .load(loadRequest)
+              .then(() => logPlayerEvent("LOAD", { mediaUrl, contentType }))
+              .catch((error) => {
+                console.warn("Keep-alive load failed", error);
+              });
+          };
+
+          let keepAliveUrl = null;
+          let keepAliveContentType = null;
+          try {
+            keepAliveUrl = await createKeepAliveVideoUrl();
+            if (keepAliveUrl) {
+              keepAliveContentType = "video/webm";
+              loadMedia(keepAliveUrl, keepAliveContentType);
+            }
+          } catch (error) {
+            console.warn("Unable to build keep-alive video", error);
+          }
+
+          if (!keepAliveUrl) {
+            const fallbackUrl = createKeepAliveAudioUrl();
+            if (fallbackUrl) {
+              keepAliveUrl = fallbackUrl;
+              keepAliveContentType = "audio/wav";
+              loadMedia(keepAliveUrl, keepAliveContentType);
+            }
+          }
+
+          if (!keepAliveUrl) {
+            return;
+          }
+
+          playerManager.addEventListener(cast.framework.events.EventType.MEDIA_FINISHED, () => {
+            loadMedia(keepAliveUrl, keepAliveContentType || "audio/wav");
+          });
         };
         const heartbeatNamespace = "urn:x-cast:freeze.heartbeat";
         context.addCustomMessageListener(heartbeatNamespace, (event) => {
