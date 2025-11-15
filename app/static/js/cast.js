@@ -32,6 +32,47 @@
 
   const initialState = window.CAST_STATE || { event: {}, photos: [], games: [], generated_at: null };
 
+  const startKeepAliveStream = () => {
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 2;
+      canvas.height = 2;
+      const ctx = canvas.getContext("2d");
+      if (!ctx || typeof canvas.captureStream !== "function") {
+        return;
+      }
+      let hue = 0;
+      const draw = () => {
+        ctx.fillStyle = `hsl(${hue}, 60%, 50%)`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        hue = (hue + 53) % 360;
+        requestAnimationFrame(draw);
+      };
+      draw();
+      const stream = canvas.captureStream(1);
+      const video = document.createElement("video");
+      video.muted = true;
+      video.playsInline = true;
+      video.autoplay = true;
+      video.hidden = true;
+      video.style.position = "absolute";
+      video.style.width = "1px";
+      video.style.height = "1px";
+      video.style.opacity = "0";
+      video.style.pointerEvents = "none";
+      video.style.left = "-10px";
+      video.style.top = "-10px";
+      video.srcObject = stream;
+      const playPromise = video.play();
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch(() => {});
+      }
+      document.body.appendChild(video);
+    } catch (error) {
+      console.warn("Cast keep-alive stream failed:", error);
+    }
+  };
+
   const layoutEl = document.querySelector(".cast-layout");
   const frameEl = document.querySelector(".cast-photo__frame");
   let photoEl = document.querySelector("[data-cast-photo]");
@@ -427,5 +468,5 @@
   schedulePoll();
   window.addEventListener("resize", syncLayoutHeights);
   syncLayoutHeights();
+  startKeepAliveStream();
 })();
-
