@@ -73,6 +73,30 @@
     }
   };
 
+  const startKeepAliveAudio = () => {
+    try {
+      const audio = document.createElement("audio");
+      audio.loop = true;
+      audio.autoplay = true;
+      audio.muted = true;
+      audio.playsInline = true;
+      audio.hidden = true;
+      audio.style.position = "absolute";
+      audio.style.left = "-10px";
+      audio.style.top = "-10px";
+      audio.style.opacity = "0";
+      audio.src =
+        "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch(() => {});
+      }
+      document.body.appendChild(audio);
+    } catch (error) {
+      console.warn("Cast keep-alive audio failed:", error);
+    }
+  };
+
   const layoutEl = document.querySelector(".cast-layout");
   const frameEl = document.querySelector(".cast-photo__frame");
   let photoEl = document.querySelector("[data-cast-photo]");
@@ -469,4 +493,5 @@
   window.addEventListener("resize", syncLayoutHeights);
   syncLayoutHeights();
   startKeepAliveStream();
+  startKeepAliveAudio();
 })();
