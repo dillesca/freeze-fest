@@ -307,7 +307,7 @@
         const name = document.createElement("p");
         name.className = "cast-semis__name-title";
         const rawName = team.name || "Team";
-        name.textContent = rawName.length > 17 ? `${rawName.slice(0, 17)}...` : rawName;
+        name.textContent = rawName;
         body.appendChild(name);
 
         if (bucketMode) {

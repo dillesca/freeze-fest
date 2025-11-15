@@ -50,8 +50,7 @@
                   <div class="cast-semis__item {% if index < 4 %}cast-semis__item--qualified{% endif %}">
                     <span class="cast-semis__rank">#{{ index + 1 }}</span>
                     <div class="cast-semis__body">
-                      {% set display_name = team.name[:17] ~ ('...' if team.name|length > 17 else '') %}
-                      <p class="cast-semis__name-title">{{ display_name }}</p>
+                      <p class="cast-semis__name-title">{{ team.name }}</p>
                       {% if cast_state.bucket_pool_mode %}
                         {% if team.bucket_score is not none %}
                         <p class="cast-semis__meta cast-semis__golf">Bucket score: {{ team.bucket_score }}</p>
