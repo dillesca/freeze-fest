@@ -650,6 +650,10 @@ async def cast_log(request: Request):
     except Exception:
         payload = {}
     message = payload.get("message") or payload.get("error") or "Unknown cast log"
+    if message == "CAF_EVENT":
+        event = payload.get("event", {})
+        logger.info("Cast CAF event: %s", event)
+        return {"status": "logged"}
     source = payload.get("source")
     line = payload.get("lineno")
     stack = payload.get("stack")

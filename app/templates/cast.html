@@ -305,6 +305,19 @@
           }
         };
 
+        const logToServer = (payload) => {
+          try {
+            fetch("/cast/log", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              keepalive: true,
+              body: JSON.stringify(payload),
+            }).catch(() => {});
+          } catch (_) {
+            // ignore logging failures
+          }
+        };
+
         const startKeepAlivePlayback = async () => {
           const playerManager = context.getPlayerManager();
           if (!playerManager) {
@@ -312,11 +325,17 @@
           }
 
           const logPlayerEvent = (label, payload) => {
+            const entry = {
+              label,
+              timestamp: new Date().toISOString(),
+              payload,
+            };
             try {
               console.log(`[Cast Player] ${label}`, payload);
             } catch (_) {
               // console might be disabled
             }
+            logToServer({ message: "CAF_EVENT", event: entry });
           };
 
           playerManager.addEventListener(
