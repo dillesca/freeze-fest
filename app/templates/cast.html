@@ -50,7 +50,7 @@
                   <div class="cast-semis__item {% if index < 4 %}cast-semis__item--qualified{% endif %}">
                     <span class="cast-semis__rank">#{{ index + 1 }}</span>
                     <div class="cast-semis__body">
-                      {% set display_name = team.name[:15] ~ ('...' if team.name|length > 15 else '') %}
+                      {% set display_name = team.name[:17] ~ ('...' if team.name|length > 17 else '') %}
                       <p class="cast-semis__name-title">{{ display_name }}</p>
                       {% if cast_state.bucket_pool_mode %}
                         {% if team.bucket_score is not none %}
@@ -214,6 +214,68 @@
         }
 
         const context = window.cast.framework.CastReceiverContext.getInstance();
+        const createKeepAliveMedia = () => {
+          try {
+            const canvas = document.createElement("canvas");
+            canvas.width = 2;
+            canvas.height = 2;
+            const ctx = canvas.getContext("2d");
+            if (!ctx || typeof canvas.captureStream !== "function") {
+              return null;
+            }
+            let hue = 0;
+            const draw = () => {
+              ctx.fillStyle = `hsl(${hue}, 65%, 55%)`;
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              hue = (hue + 37) % 360;
+              requestAnimationFrame(draw);
+            };
+            draw();
+            const video = document.createElement("video");
+            video.muted = true;
+            video.playsInline = true;
+            video.autoplay = true;
+            video.loop = true;
+            video.hidden = true;
+            video.style.position = "absolute";
+            video.style.width = "1px";
+            video.style.height = "1px";
+            video.style.opacity = "0";
+            video.style.pointerEvents = "none";
+            video.style.left = "-10px";
+            video.style.top = "-10px";
+            video.srcObject = canvas.captureStream(1);
+            const playPromise = video.play();
+            if (playPromise && typeof playPromise.catch === "function") {
+              playPromise.catch(() => {});
+            }
+            document.body.appendChild(video);
+
+            const audio = document.createElement("audio");
+            audio.loop = true;
+            audio.autoplay = true;
+            audio.muted = true;
+            audio.playsInline = true;
+            audio.hidden = true;
+            audio.style.position = "absolute";
+            audio.style.left = "-10px";
+            audio.style.top = "-10px";
+            audio.style.opacity = "0";
+            audio.src =
+              "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
+            const audioPromise = audio.play();
+            if (audioPromise && typeof audioPromise.catch === "function") {
+              audioPromise.catch(() => {});
+            }
+            document.body.appendChild(audio);
+
+            return { video, audio };
+          } catch (error) {
+            console.warn("Failed to create keep-alive media", error);
+            return null;
+          }
+        };
+        const keepAliveMedia = createKeepAliveMedia();
         const heartbeatNamespace = "urn:x-cast:freeze.heartbeat";
         context.addCustomMessageListener(heartbeatNamespace, (event) => {
           if (event && event.senderId) {
@@ -225,6 +287,15 @@
         receiverOptions.statusText = "Freeze Fest Live";
         receiverOptions.maxInactivity = 3600;
         receiverOptions.disableIdleTimeout = true;
+        if (keepAliveMedia && keepAliveMedia.video) {
+          receiverOptions.mediaElement = keepAliveMedia.video;
+          const playerManager = context.getPlayerManager();
+          try {
+            playerManager.setMediaElement(keepAliveMedia.video);
+          } catch (err) {
+            console.warn("Unable to register keep-alive media element", err);
+          }
+        }
         context.start(receiverOptions);
       });
     </script>
